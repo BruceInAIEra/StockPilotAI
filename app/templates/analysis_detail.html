@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}{{ analysis.symbol }} analysis · StockPilotAI{% endblock %}
+{% block content %}
+  <section class="result-header">
+    <a href="/" class="back-link">← New analysis</a>
+    <div class="result-title-row">
+      <div>
+        <div class="symbol-line">
+          <span class="ticker-chip large">{{ analysis.symbol }}</span>
+          <span>{{ analysis.market_data.exchange if analysis.market_data else '' }}</span>
+        </div>
+        <h1>{{ analysis.company_name }}</h1>
+        <p>
+          {{ analysis.horizon.value|replace('_', ' ')|title }} ·
+          {{ 'Current position' if analysis.owns_stock else 'Prospective position' }} ·
+          {{ analysis.model }}
+        </p>
+      </div>
+      {% if analysis.action %}
+        <div class="recommendation action-{{ analysis.action.value|lower }}">
+          <small>Recommendation</small>
+          <strong>{{ analysis.action.value }}</strong>
+          <span>{{ (analysis.confidence * 100)|round|int }}% analysis confidence</span>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if analysis.analysis and analysis.market_data %}
+    <section class="market-strip">
+      <div><small>Price</small><strong>{{ analysis.market_data.currency }} {{ '%.2f'|format(analysis.market_data.current_price) }}</strong></div>
+      <div><small>Daily move</small><strong class="{{ 'positive' if (analysis.market_data.daily_change_percent or 0) >= 0 else 'negative' }}">{{ '%+.2f'|format(analysis.market_data.daily_change_percent or 0) }}%</strong></div>
+      <div><small>52-week range</small><strong>{{ '%.2f'|format(analysis.market_data.fifty_two_week_low) }}–{{ '%.2f'|format(analysis.market_data.fifty_two_week_high) }}</strong></div>
+      <div><small>Data as of</small><strong>{{ analysis.market_data.as_of.strftime('%b %d, %Y') }}</strong></div>
+    </section>
+
+    <div class="result-grid">
+      <article class="panel thesis-card">
+        <span class="step">The view</span>
+        <h2>{{ analysis.analysis.summary }}</h2>
+        <div class="case-grid">
+          <div>
+            <h3>Bull case</h3>
+            <ul>{% for item in analysis.analysis.bull_case %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+          <div>
+            <h3>Bear case</h3>
+            <ul>{% for item in analysis.analysis.bear_case %}<li>{{ item }}</li>{% endfor %}</ul>
+          </div>
+        </div>
+      </article>
+
+      <aside class="panel entry-card">
+        <span class="step">Action plan</span>
+        <h2>{{ analysis.analysis.future_entry_plan.status }}</h2>
+        <h3>Conditions to watch</h3>
+        <ul>{% for item in analysis.analysis.future_entry_plan.conditions %}<li>{{ item }}</li>{% endfor %}</ul>
+        <h3>Thesis breaks if</h3>
+        <ul>{% for item in analysis.analysis.future_entry_plan.invalidation_conditions %}<li>{{ item }}</li>{% endfor %}</ul>
+      </aside>
+    </div>
+
+    <section class="panel evidence-card">
+      <div class="panel-heading">
+        <div><span class="step">Evidence</span><h2>What the model used</h2></div>
+        <span>{{ analysis.market_data.source }}</span>
+      </div>
+      <div class="evidence-table" role="table">
+        {% for item in analysis.analysis.evidence %}
+          <div class="evidence-row" role="row">
+            <strong>{{ item.metric }}</strong>
+            <span class="evidence-value">{{ item.value }}</span>
+            <span>{{ item.claim }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <div class="result-grid lower-grid">
+      <section class="panel">
+        <span class="step">Key risks</span>
+        <ul class="spaced-list">{% for item in analysis.analysis.risks %}<li>{{ item }}</li>{% endfor %}</ul>
+      </section>
+      <section class="panel muted-panel">
+        <span class="step">Data limitations</span>
+        <ul class="spaced-list">{% for item in analysis.analysis.data_limitations %}<li>{{ item }}</li>{% endfor %}</ul>
+      </section>
+    </div>
+
+    <details class="indicator-guide">
+      <summary>What do SMA, RSI, returns, and volatility mean?</summary>
+      <div>
+        <p><strong>SMA</strong> is the average closing price over 20, 50, or 200 trading days and helps describe the trend.</p>
+        <p><strong>Returns</strong> show the percentage price change over a selected period.</p>
+        <p><strong>RSI</strong> measures recent momentum from 0 to 100; it does not independently prove a buy or sell.</p>
+        <p><strong>Volatility</strong> describes how sharply price moves; higher values indicate larger historical swings.</p>
+      </div>
+    </details>
+  {% else %}
+    <div class="alert"><strong>This analysis is incomplete.</strong><span>{{ analysis.error_message or 'Try running it again.' }}</span></div>
+  {% endif %}
+{% endblock %}
+

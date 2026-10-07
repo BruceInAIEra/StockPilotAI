@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Analyze a stock · StockPilotAI{% endblock %}
+{% block content %}
+  <section class="hero">
+    <div class="eyebrow">AI-assisted market research</div>
+    <h1>Turn a ticker into a clear next step.</h1>
+    <p>
+      StockPilotAI combines timestamped price data, explainable indicators, and a
+      structured AI review to suggest Buy, Hold, Sell, or Watch.
+    </p>
+  </section>
+
+  <div class="workspace-grid">
+    <section class="panel analysis-form-panel">
+      <div class="panel-heading">
+        <div>
+          <span class="step">New analysis</span>
+          <h2>What should we review?</h2>
+        </div>
+        <span class="privacy-note">Saved only on this computer</span>
+      </div>
+
+      {% if error %}
+        <div class="alert" role="alert">
+          <strong>Analysis could not be completed.</strong>
+          <span>{{ error }}</span>
+        </div>
+      {% endif %}
+
+      <form action="/analyze" method="post" id="analysis-form">
+        <label for="symbol">Stock ticker</label>
+        <div class="ticker-input">
+          <span>$</span>
+          <input
+            id="symbol"
+            name="symbol"
+            type="text"
+            maxlength="15"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="AAPL"
+            value="{{ form.symbol if form else '' }}"
+            required
+            autofocus
+          >
+        </div>
+        <p class="field-help">Use a market ticker such as AAPL, MSFT, or BRK.B.</p>
+
+        <fieldset>
+          <legend>Investment horizon</legend>
+          <div class="segmented three">
+            {% set selected_horizon = form.horizon if form else 'medium_term' %}
+            <label>
+              <input type="radio" name="horizon" value="short_term" {% if selected_horizon == 'short_term' %}checked{% endif %}>
+              <span>Short term<small>Days to weeks</small></span>
+            </label>
+            <label>
+              <input type="radio" name="horizon" value="medium_term" {% if selected_horizon == 'medium_term' %}checked{% endif %}>
+              <span>Medium term<small>Months</small></span>
+            </label>
+            <label>
+              <input type="radio" name="horizon" value="long_term" {% if selected_horizon == 'long_term' %}checked{% endif %}>
+              <span>Long term<small>Years</small></span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Current position</legend>
+          {% set selected_position = form.position if form else 'not_owned' %}
+          <div class="segmented two">
+            <label>
+              <input type="radio" name="position" value="not_owned" {% if selected_position == 'not_owned' %}checked{% endif %}>
+              <span>I do not own it</span>
+            </label>
+            <label>
+              <input type="radio" name="position" value="owned" {% if selected_position == 'owned' %}checked{% endif %}>
+              <span>I currently own it</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <label for="model">Analysis model</label>
+        <select id="model" name="model">
+          {% set selected_model = form.model if form else default_model %}
+          {% for model_name in models %}
+            <option value="{{ model_name }}" {% if model_name == selected_model %}selected{% endif %}>{{ model_name }}</option>
+          {% endfor %}
+        </select>
+
+        <button class="primary-button" type="submit" id="analyze-button">
+          <span class="button-label">Analyze stock</span>
+          <span class="button-loading" aria-hidden="true">Analyzing market data…</span>
+        </button>
+      </form>
+    </section>
+
+    <aside class="panel method-panel">
+      <span class="step">How it works</span>
+      <h2>A recommendation you can inspect.</h2>
+      <ol class="method-list">
+        <li>
+          <span>01</span>
+          <div><strong>Collect</strong><p>Fetch one year of timestamped market prices.</p></div>
+        </li>
+        <li>
+          <span>02</span>
+          <div><strong>Measure</strong><p>Calculate trend, return, momentum, and volatility.</p></div>
+        </li>
+        <li>
+          <span>03</span>
+          <div><strong>Interpret</strong><p>Ask the selected model for a structured, evidence-linked view.</p></div>
+        </li>
+        <li>
+          <span>04</span>
+          <div><strong>Validate</strong><p>Apply ownership rules and save the result locally.</p></div>
+        </li>
+      </ol>
+      <div class="method-note">
+        <strong>Know the limits</strong>
+        <p>This MVP does not use news, earnings reports, valuation fundamentals, or your personal finances.</p>
+      </div>
+    </aside>
+  </div>
+
+  {% if history %}
+    <section class="history-section">
+      <div class="section-heading">
+        <div>
+          <span class="step">Local history</span>
+          <h2>Recent analyses</h2>
+        </div>
+        <span>{{ history|length }} saved</span>
+      </div>
+      <div class="history-list">
+        {% for item in history %}
+          <a href="/analyses/{{ item.id }}" class="history-row">
+            <span class="ticker-chip">{{ item.symbol }}</span>
+            <span class="history-company">{{ item.company_name }}</span>
+            <span class="action action-{{ item.action.value|lower if item.action else 'pending' }}">
+              {{ item.action.value if item.action else item.status.value }}
+            </span>
+            <time>{{ item.created_at.strftime('%b %d, %Y · %I:%M %p') }}</time>
+            <span aria-hidden="true">→</span>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}
+

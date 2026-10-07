@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Local-first, AI-assisted stock research">
+    <title>{% block title %}StockPilotAI{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', path='/favicon.svg') }}" type="image/svg+xml">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+    <script defer src="{{ url_for('static', path='/js/app.js') }}"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="StockPilotAI home">
+        <span class="brand-mark">SP</span>
+        <span>
+          <strong>StockPilotAI</strong>
+          <small>Evidence before action</small>
+        </span>
+      </a>
+      <span class="local-badge">Local MVP</span>
+    </header>
+
+    <main>{% block content %}{% endblock %}</main>
+
+    <footer>
+      <p>
+        AI-generated research for educational purposes only. Not investment advice.
+        Verify information independently before making financial decisions.
+      </p>
+    </footer>
+  </body>
+</html>

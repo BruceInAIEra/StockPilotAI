@@ -1,152 +1,165 @@
 # StockPilotAI
 
-An intelligent AI-powered stock analysis and recommendation system that delivers personalized daily updates directly to your email inbox.
+StockPilotAI is a local-first web application that combines timestamped market data,
+deterministic technical indicators, and structured OpenAI analysis to suggest one of
+four research actions: **Buy**, **Hold**, **Sell**, or **Watch**.
 
-## Overview
+The MVP runs on your laptop, stores analysis history in a local SQLite file, and is
+organized so the database, market-data provider, AI engine, authentication, and
+background jobs can be replaced or extended for a future cloud product.
 
-StockPilotAI leverages artificial intelligence to analyze stocks you're following and provides actionable recommendations. Using multiple analysis strategies and technical indicators, the application evaluates market trends and sends you daily updates with clear recommendations: **Hold**, **Buy**, **Sell**, or **Watch**.
+> StockPilotAI provides educational research, not personalized financial advice.
+> Market data and AI output can be incomplete or wrong. Verify information independently.
 
-## Features
+## MVP features
 
-- **AI-Powered Analysis**: Advanced machine learning algorithms analyze stock performance and market patterns
-- **Multi-Strategy Approach**: Combines multiple analysis techniques including:
-  - Technical analysis
-  - Sentiment analysis
-  - Market trend analysis
-  - Historical pattern recognition
-- **Daily Email Updates**: Receive personalized stock analysis and recommendations directly in your inbox
-- **Smart Recommendations**: Get clear action items:
-  - **Buy**: Strong indicators suggest purchasing
-  - **Sell**: Signals indicate it's time to exit
-  - **Hold**: Current position is optimal
-  - **Watch**: Monitor for potential opportunities
-- **Portfolio Tracking**: Monitor multiple stocks simultaneously
+- Local FastAPI web interface at `http://127.0.0.1:8000`
+- Stock ticker, investment horizon, ownership status, and model selection
+- One year of price history through a replaceable Yahoo chart adapter
+- SMA 20/50/200, one/three/twelve-month returns, RSI 14, and volatility
+- Structured OpenAI Responses API output validated by Pydantic
+- Ownership-aware `BUY`, `HOLD`, `SELL`, and `WATCH` guardrails
+- Observable future-entry and thesis-invalidation conditions
+- Local SQLite analysis history
+- JSON API, health endpoint, migrations, tests, and Docker support
 
-## Getting Started
+Not included yet: email, scheduled reports, news or sentiment, fundamentals, user
+accounts, portfolios, multi-agent analysis, cloud infrastructure, or trading.
 
-### Prerequisites
+## Requirements
 
-- Python 3.8 or higher
-- Email account configured for sending notifications
-- API keys for market data (e.g., Alpha Vantage, Finnhub, or similar)
+- Python 3.11 or newer
+- An OpenAI API key exported as `OPENAI_API_KEY` or saved in a local `.env`
+- Internet access for market data and OpenAI
 
-### Installation
+## Run locally
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/BruceInAIEra/StockPilotAI.git
-   cd StockPilotAI
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Configure your environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` with your API keys and email settings
-
-### Configuration
-
-Update the configuration file with:
-- Stock symbols to monitor
-- Your email address for daily updates
-- Email service credentials (SMTP settings)
-- Market data API keys
-- Analysis preferences and thresholds
-
-### Usage
-
-Run the daily analysis:
 ```bash
-python main.py
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+cp .env.example .env
 ```
 
-Schedule daily updates using cron (Linux/Mac) or Task Scheduler (Windows):
+Edit `.env` and replace the placeholder API key. If `OPENAI_API_KEY` is already
+available in your shell, you may remove the placeholder line instead.
+
+Start the app:
+
 ```bash
-# Run every morning at 9 AM
-0 9 * * * /usr/bin/python3 /path/to/StockPilotAI/main.py
+uvicorn app.main:app --reload
 ```
 
-## How It Works
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-1. **Data Collection**: Fetches current market data and historical prices for monitored stocks
-2. **Analysis**: Applies multiple AI strategies to analyze trends, patterns, and market sentiment
-3. **Recommendation Engine**: Combines analysis results to generate buy/sell/hold/watch signals
-4. **Report Generation**: Creates a comprehensive analysis report
-5. **Email Delivery**: Sends formatted recommendations to your email inbox
+The database is created at `data/stockpilot.db`. It persists after the local server
+stops and is ignored by Git.
 
-## Project Structure
+## Configuration
 
+| Variable | Default | Purpose |
+|---|---|---|
+| `OPENAI_API_KEY` | none | Server-side OpenAI credential |
+| `OPENAI_DEFAULT_MODEL` | `gpt-5-mini` | Preselected UI model |
+| `OPENAI_ALLOWED_MODELS` | `gpt-5-mini,gpt-4.1-mini,gpt-4o-mini` | Comma-separated model allowlist |
+| `OPENAI_TIMEOUT_SECONDS` | `60` | OpenAI request timeout |
+| `DATABASE_URL` | `sqlite:///data/stockpilot.db` | SQLite locally; PostgreSQL later |
+| `MARKET_DATA_TIMEOUT_SECONDS` | `20` | Market-data request timeout |
+
+Model availability depends on the OpenAI project associated with your API key. Edit
+the allowlist when you want to add or remove selectable models.
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/` | Local analysis UI |
+| `POST` | `/analyze` | Submit the HTML form |
+| `GET` | `/analyses/{id}` | Open a saved result |
+| `GET` | `/api/v1/models` | Read configured model choices |
+| `POST` | `/api/v1/analyses` | Create a JSON analysis |
+| `GET` | `/api/v1/analyses` | List local history |
+| `GET` | `/api/v1/analyses/{id}` | Retrieve one analysis |
+| `GET` | `/health` | Health check |
+
+Example JSON request:
+
+```json
+{
+  "symbol": "AAPL",
+  "horizon": "long_term",
+  "owns_stock": false,
+  "model": "gpt-5-mini"
+}
 ```
+
+## Project structure
+
+```text
 StockPilotAI/
-├── main.py                 # Entry point
-├── requirements.txt        # Python dependencies
-├── .env.example           # Environment configuration template
-├── config/                # Configuration files
-├── ai/                    # AI models and analysis engines
-├── analysis/              # Analysis strategies
-├── data/                  # Data collection and processing
-├── notifications/         # Email notification system
-└── README.md             # This file
+├── app/
+│   ├── api/routes/               # HTML and JSON routes
+│   ├── core/                     # Settings, errors, logging
+│   ├── domain/                   # Typed requests, results, market snapshots
+│   ├── providers/
+│   │   ├── llm/                  # OpenAI structured analysis adapter
+│   │   └── market_data/          # Replaceable market-data adapter
+│   ├── repositories/             # SQLAlchemy persistence
+│   ├── services/                 # Workflow and indicator calculations
+│   ├── static/                   # CSS and JavaScript
+│   ├── templates/                # Server-rendered UI
+│   └── main.py                   # Application assembly
+├── migrations/                   # Alembic database migrations
+├── tests/                        # Unit and integration tests
+├── data/                         # Ignored local database files
+├── Dockerfile
+├── pyproject.toml
+└── README.md
 ```
 
-## Technologies
+## Database migrations
 
-- **Python**: Core programming language
-- **AI/ML**: Machine learning libraries for predictive analysis
-- **APIs**: Market data integration
-- **Email**: SMTP for notification delivery
+The application creates the initial table automatically for a convenient local start.
+Alembic is included for controlled schema changes:
 
-## Recommendations Explained
-
-- **🟢 BUY**: Technical indicators and AI analysis show strong bullish signals
-- **🔴 SELL**: Multiple indicators suggest downward pressure; consider exiting
-- **🟡 HOLD**: Current position is stable; maintain existing holdings
-- **🔵 WATCH**: Stock shows potential but requires monitoring before action
-
-## Configuration Example
-
-Create a `.env` file with the following:
-```
-# Email Configuration
-EMAIL_SENDER=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
-EMAIL_RECIPIENT=recipient@example.com
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-
-# Market Data API
-MARKET_DATA_API_KEY=your_api_key_here
-MARKET_DATA_PROVIDER=alpha_vantage
-
-# Stocks to Monitor
-STOCKS=AAPL,MSFT,GOOGL,TSLA
-
-# Analysis Settings
-ANALYSIS_THRESHOLD=0.65
-UPDATE_TIME=09:00
+```bash
+alembic upgrade head
 ```
 
-## Contributing
+For a cloud release, change `DATABASE_URL` to PostgreSQL and run migrations during
+deployment. Do not put SQLite on an ephemeral container filesystem.
 
-Contributions are welcome! Please feel free to submit a Pull Request with improvements, bug fixes, or new analysis strategies.
+## Tests
+
+Tests use deterministic fake providers and do not spend OpenAI credits:
+
+```bash
+pytest
+```
+
+## Current data limitations
+
+The MVP uses Yahoo chart data because it needs no second API key. This is convenient
+for personal prototyping but is not a contractual or licensed production feed. The
+adapter is deliberately isolated behind `MarketDataProvider`; replace it with a
+licensed provider before a public release.
+
+The current analysis uses price-derived indicators only. It does not include company
+financial statements, valuation, earnings, filings, news, sentiment, or macroeconomic
+data. The prompt requires the model to disclose those limitations and avoid inventing
+missing facts.
+
+## Future path
+
+- PostgreSQL and per-user ownership of saved analyses
+- Authentication and authorization
+- SQS-style background jobs for long-running multi-agent analysis
+- Independent technical, fundamental, risk, and contrarian agents plus a judge
+- Scheduled watchlists and email reports
+- Licensed market/fundamental data
+- Rate limiting, usage budgets, audit logs, and production monitoring
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Disclaimer
-
-**Important**: StockPilotAI provides AI-generated analysis and recommendations for informational purposes only. It should not be considered professional financial advice. Always conduct your own research and consult with a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. Invest responsibly and never risk more than you can afford to lose.
-
-## Contact & Support
-
-For issues, questions, or suggestions, please open an issue on GitHub or contact the maintainers.
-
----
-
-**Start your intelligent stock analysis journey with StockPilotAI today!**
+MIT
