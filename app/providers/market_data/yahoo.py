@@ -75,10 +75,36 @@ class YahooFinanceProvider:
             raise InvalidSymbolError(f"No usable price history was found for {symbol}.")
 
         current_price = float(meta.get("regularMarketPrice") or closes[-1])
-        previous_close_value = meta.get("chartPreviousClose") or meta.get("previousClose")
-        previous_close = float(previous_close_value) if previous_close_value else None
-        daily_change = None
-        if previous_close and previous_close != 0:
+
+        # chartPreviousClose is the close immediately before the requested chart
+        # range. For a one-year request it is therefore roughly one year old, not
+        # the previous trading session. Yahoo's regular-market change is the
+        # authoritative day-over-day value and also handles split adjustments.
+        regular_market_change_percent = meta.get("regularMarketChangePercent")
+        daily_change = (
+            round(float(regular_market_change_percent), 4)
+            if regular_market_change_percent is not None
+            else None
+        )
+
+        previous_close = None
+        regular_market_change = meta.get("regularMarketChange")
+        if regular_market_change is not None:
+            previous_close = current_price - float(regular_market_change)
+        elif daily_change is not None and daily_change != -100:
+            previous_close = current_price / (1 + daily_change / 100)
+        else:
+            raw_close_values = [
+                float(value) for value in raw_closes if value is not None and value > 0
+            ]
+            if raw_close_values:
+                latest_is_current = abs(raw_close_values[-1] - current_price) < 0.01
+                if latest_is_current and len(raw_close_values) >= 2:
+                    previous_close = raw_close_values[-2]
+                elif not latest_is_current:
+                    previous_close = raw_close_values[-1]
+
+        if daily_change is None and previous_close and previous_close != 0:
             daily_change = round(((current_price / previous_close) - 1) * 100, 4)
 
         market_time = meta.get("regularMarketTime")
@@ -110,4 +136,3 @@ class YahooFinanceProvider:
             return_1_year_percent=percent_return(closes, min(251, len(closes) - 1)),
             trading_days=len(closes),
         )
-
