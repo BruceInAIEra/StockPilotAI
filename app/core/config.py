@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///data/stockpilot.db"
 
     openai_api_key: SecretStr | None = None
-    openai_default_model: str = "gpt-5-mini"
-    openai_allowed_models: str = "gpt-5-mini,gpt-4.1-mini,gpt-4o-mini"
+    openai_default_model: str = "gpt-6.1-sol"
+    openai_allowed_models: str = "gpt-6.1-sol,gpt-6-luna,gpt-5-mini"
     openai_timeout_seconds: float = Field(default=60, gt=0, le=300)
     market_data_timeout_seconds: float = Field(default=20, gt=0, le=120)
 
@@ -51,4 +51,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

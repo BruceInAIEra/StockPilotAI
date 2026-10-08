@@ -61,8 +61,8 @@ stops and is ignored by Git.
 | Variable | Default | Purpose |
 |---|---|---|
 | `OPENAI_API_KEY` | none | Server-side OpenAI credential |
-| `OPENAI_DEFAULT_MODEL` | `gpt-5-mini` | Preselected UI model |
-| `OPENAI_ALLOWED_MODELS` | `gpt-5-mini,gpt-4.1-mini,gpt-4o-mini` | Comma-separated model allowlist |
+| `OPENAI_DEFAULT_MODEL` | `gpt-6.1-sol` | Preselected UI model |
+| `OPENAI_ALLOWED_MODELS` | `gpt-6.1-sol,gpt-6-luna,gpt-5-mini` | Comma-separated model allowlist |
 | `OPENAI_TIMEOUT_SECONDS` | `60` | OpenAI request timeout |
 | `DATABASE_URL` | `sqlite:///data/stockpilot.db` | SQLite locally; PostgreSQL later |
 | `MARKET_DATA_TIMEOUT_SECONDS` | `20` | Market-data request timeout |
