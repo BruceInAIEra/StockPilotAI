@@ -1,7 +1,7 @@
 # StockPilotAI
 
-StockPilotAI is a local-first web application that combines timestamped market data,
-deterministic technical indicators, and structured OpenAI analysis to suggest one of
+StockPilotAI is a local-first web application that combines company fundamentals,
+valuation, deterministic technical indicators, and structured OpenAI analysis to suggest one of
 four research actions: **Buy**, **Hold**, **Sell**, or **Watch**.
 
 The MVP runs on your laptop, stores analysis history in a local SQLite file, and is
@@ -17,13 +17,18 @@ background jobs can be replaced or extended for a future cloud product.
 - Stock ticker, investment horizon, ownership status, and model selection
 - One year of price history through a replaceable Yahoo chart adapter
 - SMA 20/50/200, one/three/twelve-month returns, RSI 14, and volatility
+- Company fundamentals through Yahoo Finance / yfinance (no additional API key)
+- Up to four annual statements: revenue, year-over-year growth, net income, operating margin, and free cash flow
+- TTM revenue/margins, debt, cash, net debt, and current ratio where available
+- Trailing/forward P/E, price/sales, and EV/EBITDA with period and estimate labels
+- Optional comparison with up to three user-selected stocks, plus explicit fundamental and valuation assessments
 - Structured OpenAI Responses API output validated by Pydantic
 - Ownership-aware `BUY`, `HOLD`, `SELL`, and `WATCH` guardrails
 - Observable future-entry and thesis-invalidation conditions
 - Local SQLite analysis history
 - JSON API, health endpoint, migrations, tests, and Docker support
 
-Not included yet: email, scheduled reports, news or sentiment, fundamentals, user
+Not included yet: email, scheduled reports, news or sentiment, user
 accounts, portfolios, multi-agent analysis, cloud infrastructure, or trading.
 
 ## Requirements
@@ -90,7 +95,8 @@ Example JSON request:
   "symbol": "AAPL",
   "horizon": "long_term",
   "owns_stock": false,
-  "model": "gpt-5-mini"
+  "model": "gpt-5-mini",
+  "peer_symbols": ["MSFT", "GOOGL"]
 }
 ```
 
@@ -145,10 +151,32 @@ for personal prototyping but is not a contractual or licensed production feed. T
 adapter is deliberately isolated behind `MarketDataProvider`; replace it with a
 licensed provider before a public release.
 
-The current analysis uses price-derived indicators only. It does not include company
-financial statements, valuation, earnings, filings, news, sentiment, or macroeconomic
-data. The prompt requires the model to disclose those limitations and avoid inventing
-missing facts.
+Analyses fetch Yahoo company summaries, annual income/cash-flow statements, and the
+latest available quarterly balance sheet (annual fallback) through
+[yfinance](https://ranaroussi.github.io/yfinance/reference/api/yfinance.Ticker.html).
+Financial values carry reporting currency, fiscal periods, source links, and retrieval
+timestamps. Annual revenue growth is calculated only against a preceding fiscal year;
+cash flow is matched to the same fiscal date. Financial amounts are not currency-converted.
+
+The AI assesses business performance and whether supplied valuation multiples look
+demanding or reasonable in context. It does not calculate intrinsic value or fetch
+historical multiples, original filings, news, sentiment, or macroeconomic data.
+Forward multiples are estimates. Peer stocks are user-selected, not automatically
+verified competitors; the analysis must address industry, currency, and period differences.
+
+Fundamental-data failures leave price analysis available and are disclosed. Missing
+or nonfinite values are not replaced with zero; nonpositive valuation multiples are
+omitted. Long-term BUY recommendations become WATCH when financial or valuation
+evidence is absent. Older saved analyses remain readable; rerun them to fetch fundamentals.
+
+Yahoo coverage and reporting freshness vary, particularly for non-US securities and
+non-equity instruments. Data is vendor-normalized and not independently verified
+against filings. Annual statements older than 18 months and balance sheets older than
+200 days are flagged. yfinance uses its own network timeouts (normally 30 seconds per
+request); `MARKET_DATA_TIMEOUT_SECONDS` controls the price adapter only. Peer comparisons
+add requests and may take longer. Its local cookie/timezone cache lives in
+`data/yfinance-cache/`. Yahoo data is intended for personal research; replace these
+adapters with appropriately licensed feeds before a public release.
 
 ## Future path
 

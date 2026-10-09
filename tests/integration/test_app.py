@@ -11,7 +11,9 @@ from app.domain.analysis import (
     RecommendationAction,
 )
 from app.domain.market_data import StockSnapshot
+from app.providers.market_data.fundamentals import YahooFundamentalsProvider
 from app.main import create_app
+from tests.unit.test_fundamentals import FakeTicker
 
 
 class FakeMarketProvider:
@@ -51,7 +53,7 @@ class FakeAnalysisEngine:
             confidence=0.76,
             summary="The supplied trend measures are constructive, with known limits.",
             bull_case=["Price is above the supplied moving averages."],
-            bear_case=["The snapshot excludes fundamentals."],
+            bear_case=["Future growth may not justify the valuation."],
             risks=["Historical price behavior may not continue."],
             evidence=[
                 EvidenceItem(
@@ -65,11 +67,14 @@ class FakeAnalysisEngine:
                 conditions=["Price remains above the 200-day average"],
                 invalidation_conditions=["Price breaks below the long-term trend"],
             ),
-            data_limitations=["No company fundamentals or news were supplied."],
+            data_limitations=["No original filings or news were supplied."],
+            fundamental_analysis="Annual revenue grew 20% to USD 1,200.",
+            valuation_assessment="Trailing P/E is 20×; intrinsic value remains uncertain.",
+            comparison_analysis="Revenue increased from USD 1,000 to USD 1,200.",
         )
 
 
-def make_client(tmp_path) -> TestClient:
+def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None) -> TestClient:
     settings = Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         openai_api_key="test-key",
@@ -79,7 +84,8 @@ def make_client(tmp_path) -> TestClient:
     app = create_app(
         settings=settings,
         market_provider=FakeMarketProvider(),
-        analysis_engine=FakeAnalysisEngine(),
+        analysis_engine=analysis_engine or FakeAnalysisEngine(),
+        fundamentals_provider=fundamentals_provider or YahooFundamentalsProvider(ticker_factory=lambda symbol: FakeTicker()),
     )
     return TestClient(app)
 
@@ -108,6 +114,7 @@ def test_create_and_retrieve_analysis(tmp_path) -> None:
         assert body["symbol"] == "TEST"
         assert body["action"] == "BUY"
         assert body["market_data"]["source"] == "Test fixture"
+        assert body["market_data"]["fundamentals"]["annual_financials"][0]["revenue"] == 1200
 
         stored = client.get(f"/api/v1/analyses/{body['id']}")
         assert stored.status_code == 200
@@ -135,6 +142,9 @@ def test_html_form_redirects_to_result(tmp_path) -> None:
         assert detail.status_code == 200
         assert "Example Corporation" in detail.text
         assert "BUY" in detail.text
+        assert "Company fundamentals" in detail.text
+        assert "Is the price justified?" in detail.text
+        assert "Annual financial history" in detail.text
 
 
 def test_disallowed_model_is_rejected(tmp_path) -> None:
@@ -150,3 +160,53 @@ def test_disallowed_model_is_rejected(tmp_path) -> None:
         )
         assert response.status_code == 422
 
+
+def test_peer_input_reaches_model_persistence_and_html(tmp_path):
+    class InspectingEngine(FakeAnalysisEngine):
+        def analyze(self, snapshot, request):
+            assert [peer.symbol for peer in snapshot.peer_fundamentals] == ["MSFT", "GOOGL"]
+            assert snapshot.fundamentals.annual_financials[0].revenue == 1200
+            return super().analyze(snapshot, request)
+
+    with make_client(tmp_path, analysis_engine=InspectingEngine()) as client:
+        response = client.post("/analyze", data={
+            "symbol": "AAPL", "horizon": "long_term", "position": "not_owned",
+            "model": "test-model", "peer_symbols": "msft, GOOGL, AAPL",
+        }, follow_redirects=False)
+        assert response.status_code == 303
+        detail = client.get(response.headers["location"])
+        assert detail.status_code == 200
+        assert "MSFT" in detail.text and "GOOGL" in detail.text
+        assert "Trailing P/E is 20" in detail.text
+        stored = client.get("/api/v1/analyses").json()[0]
+        assert len(stored["market_data"]["peer_fundamentals"]) == 2
+
+
+def test_fundamentals_outage_preserves_analysis_and_blocks_long_term_buy(tmp_path):
+    class BrokenProvider:
+        def get_fundamentals(self, symbol):
+            raise TimeoutError("Provider unavailable")
+
+    with make_client(tmp_path, fundamentals_provider=BrokenProvider()) as client:
+        response = client.post("/api/v1/analyses", json={
+            "symbol": "AAPL", "horizon": "long_term", "owns_stock": False, "model": "test-model",
+        })
+        assert response.status_code == 201
+        data = response.json()
+        assert data["action"] == "WATCH"
+        assert data["confidence"] <= .4
+        assert data["market_data"]["fundamentals"]["status"] == "unavailable"
+        assert data["market_data"]["current_price"] == 100
+        assert "Wait for financial" in data["analysis"]["future_entry_plan"]["status"]
+        assert "inconclusive" in data["analysis"]["valuation_assessment"]
+        assert "20×" not in data["analysis"]["valuation_assessment"]
+        assert client.get(f"/analyses/{data['id']}").status_code == 200
+
+
+def test_peer_limit_and_invalid_symbols_are_rejected(tmp_path):
+    with make_client(tmp_path) as client:
+        for peers in (["A", "B", "C", "D"], ["<script>"]):
+            response = client.post("/api/v1/analyses", json={
+                "symbol": "AAPL", "model": "test-model", "peer_symbols": peers,
+            })
+            assert response.status_code == 422

@@ -10,6 +10,7 @@
 *.db-shm
 *.db-wal
 *.db-journal
+data/yfinance-cache/
 
 # Python caches and virtual environments
 __pycache__/

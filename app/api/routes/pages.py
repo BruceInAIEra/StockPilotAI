@@ -13,6 +13,18 @@ router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
 
 
+def financial_number(value: float | None) -> str:
+    if value is None:
+        return "—"
+    for threshold, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M")):
+        if abs(value) >= threshold:
+            return f"{value / threshold:,.2f}{suffix}"
+    return f"{value:,.2f}"
+
+
+templates.env.filters["financial_number"] = financial_number
+
+
 def _page_context(request: Request, container: AppContainer) -> dict[str, object]:
     return {
         "request": request,
@@ -42,6 +54,7 @@ def analyze(
     horizon: Annotated[str, Form()],
     position: Annotated[str, Form()],
     model: Annotated[str, Form()],
+    peer_symbols: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     context = _page_context(request, container)
     context["form"] = {
@@ -49,6 +62,7 @@ def analyze(
         "horizon": horizon,
         "position": position,
         "model": model,
+        "peer_symbols": peer_symbols,
     }
 
     try:
@@ -57,6 +71,7 @@ def analyze(
             horizon=InvestmentHorizon(horizon),
             owns_stock=position == "owned",
             model=model,
+            peer_symbols=[value.strip() for value in peer_symbols.split(",") if value.strip()],
         )
         result = container.analysis_service.run(analysis_request)
     except (ValidationError, ValueError) as exc:
@@ -107,4 +122,3 @@ def _validation_message(exc: ValidationError | ValueError) -> str:
         if errors:
             return str(errors[0].get("msg", "Check the submitted values."))
     return str(exc)
-

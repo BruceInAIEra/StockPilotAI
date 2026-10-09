@@ -12,6 +12,19 @@ from app.domain.analysis import (
 from app.domain.recommendation import apply_recommendation_policy
 
 
+def test_old_analysis_json_remains_readable():
+    data = make_analysis(RecommendationAction.WATCH).model_dump()
+    for key in ("fundamental_analysis", "valuation_assessment", "comparison_analysis"):
+        data.pop(key)
+    result = GeneratedAnalysis.model_validate(data)
+    assert result.valuation_assessment == "Not assessed in this saved analysis."
+
+
+def test_peer_symbols_are_normalized_and_deduplicated():
+    request = AnalysisRequest(symbol="AAPL", model="test", peer_symbols=[" msft ", "MSFT"])
+    assert request.peer_symbols == ["MSFT"]
+
+
 def make_analysis(action: RecommendationAction) -> GeneratedAnalysis:
     return GeneratedAnalysis(
         action=action,
@@ -72,4 +85,3 @@ def test_empty_evidence_caps_confidence() -> None:
     analysis.evidence = []
     result = apply_recommendation_policy(analysis, owns_stock=False)
     assert result.confidence == 0.35
-

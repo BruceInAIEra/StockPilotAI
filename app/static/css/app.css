@@ -160,6 +160,7 @@ select:focus {
 }
 .ticker-input input { padding: 12px 15px 12px 34px; font-weight: 800; letter-spacing: .04em; }
 select { padding: 12px 14px; }
+#peer_symbols { padding: 12px 14px; }
 .field-help { margin: -5px 0 0; color: var(--muted); font-size: .78rem; }
 
 .segmented { display: grid; gap: 8px; }
@@ -297,6 +298,19 @@ select { padding: 12px 14px; }
 .evidence-table { border-top: 1px solid var(--line); }
 .evidence-row { display: grid; grid-template-columns: 160px 125px 1fr; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--line); font-size: .84rem; }
 .evidence-value { color: var(--green-dark); font-weight: 800; }
+.evidence-row > * { overflow-wrap: anywhere; }
+.data-caption { color: var(--muted); font-size: .8rem; }
+.financial-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+.financial-metrics > div { padding: 16px; background: #f2f3ed; border-radius: 12px; }
+.financial-metrics small, .financial-metrics strong, .financial-metrics span { display: block; }
+.financial-metrics strong { margin: 5px 0; font-size: 1.25rem; }
+.financial-metrics span { color: var(--muted); font-size: .72rem; }
+.table-scroll { overflow-x: auto; }
+.financial-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.financial-table th, .financial-table td { padding: 12px 14px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.financial-table th:first-child { text-align: left; }
+.financial-table small { display: block; color: var(--muted); font-size: .72rem; font-weight: 400; }
+.indicator-guide > p, .indicator-guide > ul { margin: 0 20px 16px; }
 .lower-grid { margin-top: 22px; grid-template-columns: 1fr 1fr; }
 .muted-panel { background: #efede6; box-shadow: none; }
 .indicator-guide { margin-top: 22px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.35); }
@@ -336,4 +350,3 @@ footer { padding: 22px 0 35px; border-top: 1px solid var(--line); color: var(--m
   .history-row .action { display: none; }
   .privacy-note { display: none; }
 }
-

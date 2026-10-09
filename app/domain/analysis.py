@@ -33,6 +33,12 @@ class AnalysisRequest(BaseModel):
     horizon: InvestmentHorizon = InvestmentHorizon.MEDIUM_TERM
     owns_stock: bool = False
     model: str = Field(min_length=1, max_length=100)
+    peer_symbols: list[str] = Field(default_factory=list, max_length=3)
+
+    @field_validator("peer_symbols")
+    @classmethod
+    def normalize_peers(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(cls.normalize_symbol(value) for value in values))
 
     @field_validator("symbol")
     @classmethod
@@ -83,6 +89,18 @@ class GeneratedAnalysis(BaseModel):
     evidence: list[EvidenceItem]
     future_entry_plan: FutureEntryPlan
     data_limitations: list[str]
+    fundamental_analysis: str = Field(
+        default="Not assessed in this saved analysis.",
+        description="Assess revenue growth, margins, earnings, cash flow, and debt using supplied data.",
+    )
+    valuation_assessment: str = Field(
+        default="Not assessed in this saved analysis.",
+        description="Explain whether valuation appears demanding, reasonable, or inconclusive; cite evidence and assumptions.",
+    )
+    comparison_analysis: str = Field(
+        default="Not assessed in this saved analysis.",
+        description="Compare annual revenue and supplied peers, explaining fiscal period and business differences.",
+    )
 
 
 class AnalysisView(BaseModel):
@@ -104,4 +122,3 @@ class AnalysisView(BaseModel):
 from app.domain.market_data import StockSnapshot  # noqa: E402
 
 AnalysisView.model_rebuild()
-

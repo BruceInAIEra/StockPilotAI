@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.fundamentals import FundamentalsSnapshot
+
 
 class StockSnapshot(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -31,4 +33,5 @@ class StockSnapshot(BaseModel):
     return_3_month_percent: float | None = None
     return_1_year_percent: float | None = None
     trading_days: int = Field(ge=1)
-
+    fundamentals: FundamentalsSnapshot | None = None
+    peer_fundamentals: list[FundamentalsSnapshot] = Field(default_factory=list)

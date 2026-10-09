@@ -14,6 +14,7 @@ from app.providers.llm.base import AnalysisEngine
 from app.providers.llm.openai_provider import OpenAIAnalysisEngine
 from app.providers.market_data.base import MarketDataProvider
 from app.providers.market_data.yahoo import YahooFinanceProvider
+from app.providers.market_data.fundamentals import FundamentalsProvider, YahooFundamentalsProvider
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.database import Base, create_session_factory
 from app.services.analysis_service import AnalysisService
@@ -23,6 +24,7 @@ def create_app(
     settings: Settings | None = None,
     market_provider: MarketDataProvider | None = None,
     analysis_engine: AnalysisEngine | None = None,
+    fundamentals_provider: FundamentalsProvider | None = None,
 ) -> FastAPI:
     configure_logging()
     settings = settings or get_settings()
@@ -44,6 +46,7 @@ def create_app(
         analysis_engine=configured_analysis_engine,
         repository=repository,
         allowed_models=settings.allowed_models,
+        fundamentals_provider=fundamentals_provider or YahooFundamentalsProvider(),
     )
 
     @asynccontextmanager

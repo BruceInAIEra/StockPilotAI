@@ -60,6 +60,96 @@
       </aside>
     </div>
 
+    <div class="result-grid lower-grid">
+      <section class="panel">
+        <span class="step">Company fundamentals</span>
+        <h2>How the business is performing</h2>
+        <p>{{ analysis.analysis.fundamental_analysis }}</p>
+      </section>
+      <section class="panel">
+        <span class="step">Valuation</span>
+        <h2>Is the price justified?</h2>
+        <p>{{ analysis.analysis.valuation_assessment }}</p>
+      </section>
+    </div>
+
+    {% set fundamentals = analysis.market_data.fundamentals %}
+    {% if fundamentals %}
+      <section class="panel evidence-card">
+        <div class="panel-heading">
+          <div><span class="step">Financial snapshot</span><h2>Numbers behind the view</h2></div>
+          <span class="data-caption">{{ fundamentals.status|title }} · Retrieved {{ fundamentals.retrieved_at.strftime('%b %d, %Y') }}</span>
+        </div>
+        <p class="data-caption">
+          {{ fundamentals.sector or 'Sector unavailable' }} · {{ fundamentals.industry or 'Industry unavailable' }}<br>
+          <a href="{{ fundamentals.source_url }}" target="_blank" rel="noopener noreferrer">{{ fundamentals.source }}</a>
+          · Financial currency: {{ fundamentals.financial_currency or 'unreported' }}
+        </p>
+        {% if fundamentals.metrics %}
+          <div class="financial-metrics">
+            {% for metric in fundamentals.metrics %}
+              <div>
+                <small>{{ metric.label }}</small>
+                <strong>{{ metric.value|financial_number }} {{ metric.unit }}</strong>
+                <span>{{ metric.period }}</span>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p>Fundamentals are unavailable for this stock. A valuation conclusion cannot be established.</p>
+        {% endif %}
+        {% if fundamentals.annual_financials %}
+          <h3>Annual financial history</h3>
+          <p class="data-caption">Amounts in {{ fundamentals.financial_currency or 'unreported currency' }}. — means unavailable, not zero. YoY compares fiscal years.</p>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Annual financial history">
+            <table class="financial-table">
+              <thead><tr><th scope="col">Fiscal year ended</th><th scope="col">Revenue</th><th scope="col">Revenue YoY</th><th scope="col">Net income</th><th scope="col">Operating margin</th><th scope="col">Free cash flow</th></tr></thead>
+              <tbody>{% for year in fundamentals.annual_financials %}
+                <tr><th scope="row">{{ year.period_end }}</th><td>{{ year.revenue|financial_number }}</td><td>{{ year.revenue_growth_percent|financial_number }}{% if year.revenue_growth_percent is not none %}%{% endif %}</td><td>{{ year.net_income|financial_number }}</td><td>{{ year.operating_margin_percent|financial_number }}{% if year.operating_margin_percent is not none %}%{% endif %}</td><td>{{ year.free_cash_flow|financial_number }}</td></tr>
+              {% endfor %}</tbody>
+            </table>
+          </div>
+        {% endif %}
+      </section>
+    {% else %}
+      <section class="panel evidence-card"><p>No company fundamentals were saved with this analysis. Run a new analysis to include them.</p></section>
+    {% endif %}
+
+    <section class="panel evidence-card">
+      <span class="step">Revenue &amp; peer comparisons</span>
+      <h2>Growth and valuation in context</h2>
+      <p>{{ analysis.analysis.comparison_analysis }}</p>
+      {% if analysis.market_data.peer_fundamentals %}
+        <p class="data-caption">User-selected comparisons may have different businesses and fiscal periods. Multiples are vendor snapshots; forward P/E uses estimates.</p>
+        <div class="table-scroll" tabindex="0" role="region" aria-label="Peer comparison">
+          <table class="financial-table">
+            <thead><tr><th scope="col">Company / industry</th><th scope="col">Annual revenue / period</th><th scope="col">Revenue YoY</th><th scope="col">Trailing P/E</th><th scope="col">Forward P/E</th><th scope="col">Price / sales</th><th scope="col">EV / EBITDA</th></tr></thead>
+            <tbody>
+              {% set companies = ([fundamentals] if fundamentals else []) + analysis.market_data.peer_fundamentals %}
+              {% for company in companies %}
+                <tr>
+                  <th scope="row"><a href="{{ company.source_url }}" target="_blank" rel="noopener noreferrer">{{ company.symbol }}</a><small>{{ company.industry or 'Industry unreported' }} · {{ company.status }}</small></th>
+                  {% set annual = company.annual_financials|first %}
+                  <td>{% if annual %}{{ annual.revenue|financial_number }} {{ company.financial_currency or '?' }}<small>{{ annual.period_end }}</small>{% else %}—{% endif %}</td>
+                  <td>{% if annual and annual.revenue_growth_percent is not none %}{{ annual.revenue_growth_percent|financial_number }}%{% else %}—{% endif %}</td>
+                  {% for key in ['trailing_pe', 'forward_pe', 'price_to_sales', 'ev_to_ebitda'] %}
+                    {% set metric = company.metrics|selectattr('key', 'equalto', key)|first %}
+                    <td>{% if metric %}{{ metric.value|financial_number }}×{% else %}—{% endif %}</td>
+                  {% endfor %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% for company in analysis.market_data.peer_fundamentals %}
+          <details class="indicator-guide"><summary>{{ company.symbol }}: source and data limitations</summary>
+            <p class="data-caption">{{ company.source }} · Retrieved {{ company.retrieved_at.strftime('%b %d, %Y') }}</p>
+            <ul class="spaced-list">{% for limitation in company.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>
+          </details>
+        {% endfor %}
+      {% endif %}
+    </section>
+
     <section class="panel evidence-card">
       <div class="panel-heading">
         <div><span class="step">Evidence</span><h2>What the model used</h2></div>
@@ -100,4 +190,3 @@
     <div class="alert"><strong>This analysis is incomplete.</strong><span>{{ analysis.error_message or 'Try running it again.' }}</span></div>
   {% endif %}
 {% endblock %}
-
