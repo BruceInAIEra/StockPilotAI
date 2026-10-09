@@ -42,6 +42,7 @@ def create_app(
             else None
         ),
         timeout_seconds=settings.openai_timeout_seconds,
+        max_retries=settings.openai_max_retries,
     )
     analysis_service = AnalysisService(
         market_data=configured_market_provider,

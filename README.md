@@ -70,12 +70,23 @@ stops and is ignored by Git.
 | `OPENAI_API_KEY` | none | Server-side OpenAI credential |
 | `OPENAI_DEFAULT_MODEL` | `gpt-6.1-sol` | Preselected UI model |
 | `OPENAI_ALLOWED_MODELS` | `gpt-6.1-sol,gpt-6-luna,gpt-5-mini` | Comma-separated model allowlist |
-| `OPENAI_TIMEOUT_SECONDS` | `60` | OpenAI request timeout |
+| `OPENAI_TIMEOUT_SECONDS` | `180` | OpenAI read timeout per attempt in seconds (maximum 600) |
+| `OPENAI_MAX_RETRIES` | `1` | Additional attempts for retryable OpenAI failures (0–2) |
 | `DATABASE_URL` | `sqlite:///data/stockpilot.db` | SQLite locally; PostgreSQL later |
 | `MARKET_DATA_TIMEOUT_SECONDS` | `20` | Market-data request timeout |
 
 Model availability depends on the OpenAI project associated with your API key. Edit
 the allowlist when you want to add or remove selectable models.
+
+Fundamental and news reports can take longer than a minute to generate. The OpenAI
+adapter allows 180 seconds of read inactivity per attempt, with at most one retry
+by default. Connection/pool timeouts are capped at 10 seconds and writes at 30 seconds.
+These are network timeouts, not a deadline for the entire stock-analysis workflow;
+data collection and retries add time. If a timeout persists, try again or select
+another allowed model, or set `OPENAI_TIMEOUT_SECONDS=300` in `.env`. Restart the
+server after configuration changes. An existing explicit timeout in your `.env`
+or shell overrides the default. Server logs include model, symbol, elapsed time,
+and timeout configuration, without logging credentials or the analysis payload.
 
 ## API
 

@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     openai_default_model: str = "gpt-6.1-sol"
     openai_allowed_models: str = "gpt-6.1-sol,gpt-6-luna,gpt-5-mini"
-    openai_timeout_seconds: float = Field(default=60, gt=0, le=300)
+    openai_timeout_seconds: float = Field(default=180, gt=0, le=600)
+    openai_max_retries: int = Field(default=1, ge=0, le=2)
     market_data_timeout_seconds: float = Field(default=20, gt=0, le=120)
 
     @field_validator("database_url", "openai_default_model")
