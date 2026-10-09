@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.fundamentals import FundamentalsSnapshot
+from app.domain.news import NewsSnapshot
 
 
 class StockSnapshot(BaseModel):
@@ -35,3 +36,4 @@ class StockSnapshot(BaseModel):
     trading_days: int = Field(ge=1)
     fundamentals: FundamentalsSnapshot | None = None
     peer_fundamentals: list[FundamentalsSnapshot] = Field(default_factory=list)
+    news: NewsSnapshot | None = None

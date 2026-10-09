@@ -73,6 +73,50 @@
       </section>
     </div>
 
+    {% set news = analysis.market_data.news %}
+    {% set news_analysis = analysis.analysis.news_analysis %}
+    <section class="panel evidence-card">
+      <div class="panel-heading">
+        <div><span class="step">News &amp; catalysts</span><h2>How recent events affect the view</h2></div>
+        {% if news %}<span class="data-caption">Coverage: {{ news.status|title }}</span>{% endif %}
+      </div>
+      {% if news_analysis %}
+        <p><strong>News sentiment: {{ news_analysis.sentiment|title }}</strong></p>
+        <p>{{ news_analysis.summary }}</p>
+        <h3>Impact on the recommendation</h3>
+        <p>{{ news_analysis.recommendation_impact }}</p>
+        {% for event in news_analysis.events %}
+          <article>
+            <h3>{{ event.headline }}</h3>
+            <p class="data-caption">{{ event.evidence_type|title }} · {{ event.direction|title }}</p>
+            <p>{{ event.implication }}</p>
+            {% if news %}<ul class="spaced-list">
+              {% for article in news.articles if article.id in event.article_ids %}
+                <li><a href="{{ article.url }}" target="_blank" rel="noopener noreferrer">{{ article.title }}</a> · {{ article.publisher }} · {{ article.published_at.strftime('%b %d, %Y · %H:%M UTC') }}</li>
+              {% endfor %}
+            </ul>{% endif %}
+          </article>
+        {% endfor %}
+      {% else %}
+        <p>News was not assessed in this saved analysis. Run a new analysis to include it.</p>
+      {% endif %}
+      {% if news %}
+        <p class="data-caption">{{ news.source }} · Retrieved {{ news.retrieved_at.strftime('%b %d, %Y · %H:%M UTC') }}<br>
+          News window: {{ news.window_start.strftime('%b %d, %Y') }}–{{ news.retrieved_at.strftime('%b %d, %Y') }} · {{ news.articles|length }} {{ 'article' if news.articles|length == 1 else 'articles' }}</p>
+        {% if news.articles %}
+          <details class="indicator-guide"><summary>Review supplied headlines and summaries</summary>
+            <ul class="spaced-list">{% for article in news.articles %}
+              <li><a href="{{ article.url }}" target="_blank" rel="noopener noreferrer">{{ article.title }}</a>
+                <p class="data-caption">{{ article.publisher }} · {{ article.published_at.strftime('%b %d, %Y · %H:%M UTC') }}</p>
+                <p>{{ article.summary or 'Only a headline was supplied; details are unverified.' }}</p>
+              </li>
+            {% endfor %}</ul>
+          </details>
+        {% endif %}
+        <ul class="spaced-list">{% for limitation in news.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>
+      {% endif %}
+    </section>
+
     {% set fundamentals = analysis.market_data.fundamentals %}
     {% if fundamentals %}
       <section class="panel evidence-card">

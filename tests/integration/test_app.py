@@ -11,9 +11,11 @@ from app.domain.analysis import (
     RecommendationAction,
 )
 from app.domain.market_data import StockSnapshot
+from app.domain.news import NewsAssessment, NewsEvent
 from app.providers.market_data.fundamentals import YahooFundamentalsProvider
 from app.main import create_app
 from tests.unit.test_fundamentals import FakeTicker
+from tests.unit.test_news import FakeNewsProvider
 
 
 class FakeMarketProvider:
@@ -67,14 +69,23 @@ class FakeAnalysisEngine:
                 conditions=["Price remains above the 200-day average"],
                 invalidation_conditions=["Price breaks below the long-term trend"],
             ),
-            data_limitations=["No original filings or news were supplied."],
+            data_limitations=["No original filings were supplied."],
             fundamental_analysis="Annual revenue grew 20% to USD 1,200.",
             valuation_assessment="Trailing P/E is 20×; intrinsic value remains uncertain.",
             comparison_analysis="Revenue increased from USD 1,000 to USD 1,200.",
+            news_analysis=NewsAssessment(
+                sentiment="positive", summary="Reported guidance supports growth expectations.",
+                recommendation_impact="Guidance supports BUY alongside the financial evidence; monitor delivery against it.",
+                events=[NewsEvent(
+                    headline="Revenue guidance raised", article_ids=[snapshot.news.articles[0].id],
+                    evidence_type="reported", direction="positive",
+                    implication="Higher guidance supports the revenue outlook, subject to execution risk.",
+                )] if snapshot.news and snapshot.news.articles else [],
+            ),
         )
 
 
-def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None) -> TestClient:
+def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news_provider=None) -> TestClient:
     settings = Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         openai_api_key="test-key",
@@ -86,6 +97,7 @@ def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None) -> T
         market_provider=FakeMarketProvider(),
         analysis_engine=analysis_engine or FakeAnalysisEngine(),
         fundamentals_provider=fundamentals_provider or YahooFundamentalsProvider(ticker_factory=lambda symbol: FakeTicker()),
+        news_provider=news_provider or FakeNewsProvider(),
     )
     return TestClient(app)
 
@@ -145,6 +157,10 @@ def test_html_form_redirects_to_result(tmp_path) -> None:
         assert "Company fundamentals" in detail.text
         assert "Is the price justified?" in detail.text
         assert "Annual financial history" in detail.text
+        assert "News &amp; catalysts" in detail.text
+        assert "https://example.com/guidance" in detail.text
+        assert "Revenue guidance raised" in detail.text
+        assert "Example Wire" in detail.text
 
 
 def test_disallowed_model_is_rejected(tmp_path) -> None:
@@ -210,3 +226,81 @@ def test_peer_limit_and_invalid_symbols_are_rejected(tmp_path):
                 "symbol": "AAPL", "model": "test-model", "peer_symbols": peers,
             })
             assert response.status_code == 422
+
+
+def test_news_reaches_model_and_is_saved_with_source_linked_impact(tmp_path):
+    class InspectingEngine(FakeAnalysisEngine):
+        def analyze(self, snapshot, request):
+            assert snapshot.news.symbol == "AAPL"
+            assert snapshot.news.articles[0].summary == "Management raised its full-year revenue guidance."
+            assert snapshot.news.status == "available"
+            return super().analyze(snapshot, request)
+
+    with make_client(tmp_path, analysis_engine=InspectingEngine()) as client:
+        response = client.post("/api/v1/analyses", json={"symbol": "AAPL", "model": "test-model"})
+        assert response.status_code == 201
+        data = response.json()
+        stored = client.get(f"/api/v1/analyses/{data['id']}").json()
+        assert stored["market_data"]["news"] == data["market_data"]["news"]
+        assert stored["analysis"]["news_analysis"]["events"][0]["article_ids"] == [
+            stored["market_data"]["news"]["articles"][0]["id"]
+        ]
+        assert "supports BUY" in stored["analysis"]["news_analysis"]["recommendation_impact"]
+
+
+def test_news_outage_preserves_report_and_guards_short_term_buy(tmp_path):
+    class BrokenProvider:
+        def get_news(self, symbol):
+            raise TimeoutError("upstream credentials must not leak")
+
+    with make_client(tmp_path, news_provider=BrokenProvider()) as client:
+        response = client.post("/api/v1/analyses", json={
+            "symbol": "AAPL", "model": "test-model", "horizon": "short_term",
+        })
+        assert response.status_code == 201
+        data = response.json()
+        assert data["action"] == "WATCH"
+        assert data["confidence"] == .55
+        assert data["market_data"]["news"]["status"] == "unavailable"
+        assert data["market_data"]["current_price"] == 100
+        assert data["analysis"]["news_analysis"]["sentiment"] == "unknown"
+        assert data["analysis"]["news_analysis"]["events"] == []
+        assert "WATCH" in data["analysis"]["news_analysis"]["recommendation_impact"]
+        assert "upstream credentials" not in response.text
+        page = client.get(f"/analyses/{data['id']}")
+        assert page.status_code == 200
+        assert "Coverage: Unavailable" in page.text
+
+
+def test_old_saved_report_renders_without_news(tmp_path):
+    import json
+    import sqlite3
+
+    with make_client(tmp_path) as client:
+        data = client.post("/api/v1/analyses", json={"symbol": "AAPL", "model": "test-model"}).json()
+        market = data["market_data"]
+        result = data["analysis"]
+        market.pop("news")
+        result.pop("news_analysis")
+        with sqlite3.connect(tmp_path / "test.db") as db:
+            db.execute("UPDATE analyses SET market_data_json = ?, result_json = ? WHERE id = ?",
+                       (json.dumps(market), json.dumps(result), data["id"]))
+        page = client.get(f"/analyses/{data['id']}")
+        assert page.status_code == 200
+        assert "News was not assessed in this saved analysis" in page.text
+
+
+def test_untrusted_news_text_is_escaped_in_html(tmp_path):
+    class UnsafeTextProvider(FakeNewsProvider):
+        def get_news(self, symbol):
+            news = super().get_news(symbol)
+            news.articles[0].title = '<script>alert("injected")</script>'
+            news.articles[0].summary = '<img src=x onerror="alert(1)">'
+            return news
+
+    with make_client(tmp_path, news_provider=UnsafeTextProvider()) as client:
+        data = client.post("/api/v1/analyses", json={"symbol": "AAPL", "model": "test-model"}).json()
+        page = client.get(f"/analyses/{data['id']}")
+        assert "<script>alert" not in page.text
+        assert "&lt;script&gt;alert" in page.text
+        assert "<img src=x" not in page.text

@@ -1,7 +1,7 @@
 # StockPilotAI
 
 StockPilotAI is a local-first web application that combines company fundamentals,
-valuation, deterministic technical indicators, and structured OpenAI analysis to suggest one of
+valuation, recent news and catalysts, deterministic technical indicators, and structured OpenAI analysis to suggest one of
 four research actions: **Buy**, **Hold**, **Sell**, or **Watch**.
 
 The MVP runs on your laptop, stores analysis history in a local SQLite file, and is
@@ -22,13 +22,15 @@ background jobs can be replaced or extended for a future cloud product.
 - TTM revenue/margins, debt, cash, net debt, and current ratio where available
 - Trailing/forward P/E, price/sales, and EV/EBITDA with period and estimate labels
 - Optional comparison with up to three user-selected stocks, plus explicit fundamental and valuation assessments
+- Recent news headlines and summaries, publication dates, publishers, and source links (no additional API key)
+- News sentiment, source-linked catalysts and risks, and their impact on the recommendation and action plan
 - Structured OpenAI Responses API output validated by Pydantic
 - Ownership-aware `BUY`, `HOLD`, `SELL`, and `WATCH` guardrails
 - Observable future-entry and thesis-invalidation conditions
 - Local SQLite analysis history
 - JSON API, health endpoint, migrations, tests, and Docker support
 
-Not included yet: email, scheduled reports, news or sentiment, user
+Not included yet: email, scheduled reports, user
 accounts, portfolios, multi-agent analysis, cloud infrastructure, or trading.
 
 ## Requirements
@@ -160,7 +162,7 @@ cash flow is matched to the same fiscal date. Financial amounts are not currency
 
 The AI assesses business performance and whether supplied valuation multiples look
 demanding or reasonable in context. It does not calculate intrinsic value or fetch
-historical multiples, original filings, news, sentiment, or macroeconomic data.
+historical multiples, original filings, full news articles, or macroeconomic datasets.
 Forward multiples are estimates. Peer stocks are user-selected, not automatically
 verified competitors; the analysis must address industry, currency, and period differences.
 
@@ -169,11 +171,45 @@ or nonfinite values are not replaced with zero; nonpositive valuation multiples 
 omitted. Long-term BUY recommendations become WATCH when financial or valuation
 evidence is absent. Older saved analyses remain readable; rerun them to fetch fundamentals.
 
+### News and catalysts
+
+Each new analysis requests a sample of recent ticker-associated news through yfinance.
+If the ticker stream fails or is empty, the adapter tries Yahoo news search once
+with a 15-second timeout and labels the fallback. Explicitly unrelated ticker tags
+are excluded; the model must still assess each article's relevance.
+It includes up to 20 unique articles published within the previous 30 days, ordered
+newest first. Articles need a title, publisher, safe HTTP(S) source URL, and valid
+publication timestamp; duplicates and invalid or future-dated items are excluded.
+The newest article being more than 7 days old marks coverage as stale. Retrieval
+time, publication times, coverage status, and the supplied summaries are saved with
+the analysis so the recommendation can be inspected later.
+
+The model evaluates relevance, distinguishes reported developments from rumor and
+opinion, and explains effects on business performance, valuation, near-term sentiment,
+and event risk. It must explicitly incorporate news into the final action, confidence,
+risks, and entry/invalidation conditions. Event citations reference supplied article
+IDs; assessments citing unknown IDs are discarded. Positive headlines do not
+automatically imply BUY, and negative headlines do not automatically imply SELL.
+
+Coverage is a limited vendor sample, not a comprehensive or independently verified
+news feed. Only headlines and summaries are supplied, not full article text.
+Publication time may differ from event time. Industry and macro developments are
+considered only if present in the sample; social-media sentiment is not collected.
+The model's interpretation and relevance judgments can be wrong. Deduplication by
+URL/title does not identify every syndicated retelling of the same event.
+
+News failures leave the rest of the report available. Empty, stale, unavailable, or
+unassessed news means unknown current sentiment; confidence is capped at 55% and a
+short-term BUY becomes WATCH until current event risks can be reviewed. This is an
+application guardrail, not a calibrated probability. Financially supported longer-term
+actions may remain, with reduced confidence. Older saved reports remain readable;
+run a new analysis to include news. No database migration or extra API key is required.
+
 Yahoo coverage and reporting freshness vary, particularly for non-US securities and
 non-equity instruments. Data is vendor-normalized and not independently verified
 against filings. Annual statements older than 18 months and balance sheets older than
 200 days are flagged. yfinance uses its own network timeouts (normally 30 seconds per
-request); `MARKET_DATA_TIMEOUT_SECONDS` controls the price adapter only. Peer comparisons
+request); `MARKET_DATA_TIMEOUT_SECONDS` controls the price adapter only. News and peer comparisons
 add requests and may take longer. Its local cookie/timezone cache lives in
 `data/yfinance-cache/`. Yahoo data is intended for personal research; replace these
 adapters with appropriately licensed feeds before a public release.

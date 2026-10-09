@@ -61,7 +61,7 @@ class YahooFundamentalsProvider:
         result = unavailable_fundamentals(symbol)
         result.limitations = [
             "Yahoo financial data is vendor-normalized, not independently verified against filings.",
-            "Retrieval time is not a filing date. Historical valuation multiples and news are not supplied.",
+            "Retrieval time is not a filing date. Historical valuation multiples are not supplied.",
             "Forward P/E uses estimates; a low multiple alone does not establish undervaluation.",
         ]
         try:

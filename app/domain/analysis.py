@@ -6,6 +6,8 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.domain.news import NewsAssessment
+
 
 class InvestmentHorizon(str, Enum):
     SHORT_TERM = "short_term"
@@ -100,6 +102,10 @@ class GeneratedAnalysis(BaseModel):
     comparison_analysis: str = Field(
         default="Not assessed in this saved analysis.",
         description="Compare annual revenue and supplied peers, explaining fiscal period and business differences.",
+    )
+    news_analysis: NewsAssessment | None = Field(
+        default=None,
+        description="Assess supplied news, cite article IDs, and explain its impact on the final recommendation. Always complete for new analyses.",
     )
 
 

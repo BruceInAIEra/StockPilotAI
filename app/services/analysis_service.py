@@ -9,6 +9,7 @@ from app.domain.recommendation import apply_recommendation_policy
 from app.providers.llm.base import AnalysisEngine
 from app.providers.market_data.base import MarketDataProvider
 from app.providers.market_data.fundamentals import FundamentalsProvider, unavailable_fundamentals
+from app.providers.market_data.news import NewsProvider, unavailable_news
 from app.repositories.analysis_repository import AnalysisRepository
 
 
@@ -20,12 +21,14 @@ class AnalysisService:
         repository: AnalysisRepository,
         allowed_models: tuple[str, ...],
         fundamentals_provider: FundamentalsProvider | None = None,
+        news_provider: NewsProvider | None = None,
     ) -> None:
         self._market_data = market_data
         self._analysis_engine = analysis_engine
         self._repository = repository
         self._allowed_models = allowed_models
         self._fundamentals_provider = fundamentals_provider
+        self._news_provider = news_provider
 
     def run(self, request: AnalysisRequest) -> AnalysisView:
         if request.model not in self._allowed_models:
@@ -43,6 +46,11 @@ class AnalysisService:
                     self._get_fundamentals(symbol)
                     for symbol in request.peer_symbols if symbol != request.symbol
                 ]
+            try:
+                snapshot.news = (self._news_provider.get_news(request.symbol)
+                                 if self._news_provider else unavailable_news(request.symbol))
+            except Exception:
+                snapshot.news = unavailable_news(request.symbol)
             generated = self._analysis_engine.analyze(snapshot, request)
             result = apply_recommendation_policy(
                 generated,

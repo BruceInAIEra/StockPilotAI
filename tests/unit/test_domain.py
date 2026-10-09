@@ -14,10 +14,11 @@ from app.domain.recommendation import apply_recommendation_policy
 
 def test_old_analysis_json_remains_readable():
     data = make_analysis(RecommendationAction.WATCH).model_dump()
-    for key in ("fundamental_analysis", "valuation_assessment", "comparison_analysis"):
+    for key in ("fundamental_analysis", "valuation_assessment", "comparison_analysis", "news_analysis"):
         data.pop(key)
     result = GeneratedAnalysis.model_validate(data)
     assert result.valuation_assessment == "Not assessed in this saved analysis."
+    assert result.news_analysis is None
 
 
 def test_peer_symbols_are_normalized_and_deduplicated():
