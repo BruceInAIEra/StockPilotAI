@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -77,6 +78,14 @@ class FutureEntryPlan(BaseModel):
     )
 
 
+class DecisionFactor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rank: int = Field(ge=1, le=3, description="Importance to the final action; 1 is most important")
+    role: Literal["support", "risk", "uncertainty"]
+    point: str = Field(description="A specific, evidence-grounded factor and why it matters to the action")
+
+
 class GeneratedAnalysis(BaseModel):
     """Strict model-generated portion of an analysis."""
 
@@ -85,6 +94,11 @@ class GeneratedAnalysis(BaseModel):
     action: RecommendationAction
     confidence: float = Field(ge=0, le=1)
     summary: str
+    decision_factors: list[DecisionFactor] = Field(
+        default_factory=list,
+        max_length=3,
+        description="Up to three factors ranked by impact on the final action; absent from older saved analyses.",
+    )
     bull_case: list[str]
     bear_case: list[str]
     risks: list[str]

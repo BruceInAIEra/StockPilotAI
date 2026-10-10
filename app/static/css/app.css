@@ -279,6 +279,11 @@ select { padding: 12px 14px; }
 .negative { color: var(--red); }
 
 .thesis-card h2 { max-width: 760px; font-family: Georgia, serif; font-size: 1.85rem; font-weight: 500; }
+.decision-factors { margin: 25px 0 0; padding-left: 28px; }
+.decision-factors li { padding: 12px 0 12px 8px; border-top: 1px solid var(--line); }
+.decision-factors li::marker { color: var(--green-dark); font-weight: 800; }
+.decision-factors p { margin: 5px 0 0; }
+.thesis-card .indicator-guide .case-grid { padding: 0 20px 20px; margin-top: 0; }
 .case-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 25px; }
 .case-grid > div { padding-top: 16px; border-top: 3px solid var(--green); }
 .case-grid > div:last-child { border-color: var(--red); }

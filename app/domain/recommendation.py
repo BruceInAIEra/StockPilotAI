@@ -52,6 +52,10 @@ def apply_recommendation_policy(
     }:
         original = result.action.value
         result.action = RecommendationAction.WATCH
+        result.summary = (
+            "Watch: the supplied evidence does not support a new purchase for a user "
+            "without an existing position."
+        )
         result.data_limitations.append(
             f"The model returned {original} for a user without a position; "
             "the application normalized this to WATCH."
@@ -67,6 +71,11 @@ def apply_recommendation_policy(
             "The response did not cite snapshot evidence; treat the recommendation as low-confidence."
         )
         result.confidence = min(result.confidence, 0.35)
+
+    if result.action != analysis.action:
+        # A guardrail can replace the model's action. Keep the visible lead
+        # consistent with the action the application actually saved.
+        result.decision_factors = []
 
     return result
 

@@ -1,6 +1,6 @@
 import pytest
 
-from app.domain.analysis import AnalysisRequest, InvestmentHorizon, RecommendationAction
+from app.domain.analysis import AnalysisRequest, DecisionFactor, InvestmentHorizon, RecommendationAction
 from app.domain.recommendation import apply_recommendation_policy
 from tests.integration.test_app import FakeAnalysisEngine, FakeMarketProvider
 from tests.unit.test_fundamentals import snapshot as fundamentals_snapshot
@@ -18,11 +18,14 @@ def inputs(rows=None):
 @pytest.mark.parametrize("rows", [[], [story(days=9)], [{"content": None}]])
 def test_missing_or_stale_news_is_unknown_and_blocks_short_term_buy(rows):
     snapshot, generated = inputs(rows)
+    generated.decision_factors = [DecisionFactor(rank=1, role="support", point="The model prefers a purchase.")]
     result = apply_recommendation_policy(generated, owns_stock=False, snapshot=snapshot,
                                          horizon=InvestmentHorizon.SHORT_TERM)
     assert result.action == RecommendationAction.WATCH
     assert result.confidence <= .55
     assert result.news_analysis.sentiment == "unknown"
+    assert result.summary.startswith("Watch:")
+    assert result.decision_factors == []
     assert "news" in result.future_entry_plan.conditions[0]
 
 

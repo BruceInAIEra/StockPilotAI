@@ -80,6 +80,17 @@ in this limited analysis, not probability of profit. Cite exact supplied metrics
 the evidence list. Do not invent a price target. Give observable future-entry and
 invalidation conditions. Make data limitations explicit. This is educational
 information, not personalized financial advice.
+Write summary as the final action and its single most decisive reason in the first
+sentence. Then give only the context needed to understand that decision. Complete
+decision_factors with one to three distinct, evidence-grounded points, ranked 1 to 3
+by their impact on the final action. Put a deal breaker, major risk, or missing
+evidence first when it drives WATCH or SELL; do not automatically lead with a bull
+point. For BUY or HOLD, lead with the strongest reason for that action. Weigh
+near-term catalysts and event risk more for short_term, business durability and
+valuation more for long_term, and both for medium_term. Rank by decision relevance,
+not by sentiment, source order, or publication date. Distinguish a supportive
+factor, risk, and uncertainty using role; include a meaningful opposing factor
+when it materially affects conviction. Do not invent a factor to fill all ranks.
 Keep the report concise. Avoid repeating the same explanation across sections;
 prioritize material evidence and risks while completing every required assessment.
 """

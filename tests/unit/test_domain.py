@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from app.domain.analysis import (
     AnalysisRequest,
+    DecisionFactor,
     EvidenceItem,
     FutureEntryPlan,
     GeneratedAnalysis,
@@ -14,11 +15,12 @@ from app.domain.recommendation import apply_recommendation_policy
 
 def test_old_analysis_json_remains_readable():
     data = make_analysis(RecommendationAction.WATCH).model_dump()
-    for key in ("fundamental_analysis", "valuation_assessment", "comparison_analysis", "news_analysis"):
+    for key in ("fundamental_analysis", "valuation_assessment", "comparison_analysis", "news_analysis", "decision_factors"):
         data.pop(key)
     result = GeneratedAnalysis.model_validate(data)
     assert result.valuation_assessment == "Not assessed in this saved analysis."
     assert result.news_analysis is None
+    assert result.decision_factors == []
 
 
 def test_peer_symbols_are_normalized_and_deduplicated():
@@ -69,8 +71,12 @@ def test_request_rejects_invalid_symbol() -> None:
     [RecommendationAction.HOLD, RecommendationAction.SELL],
 )
 def test_non_owner_hold_or_sell_becomes_watch(action: RecommendationAction) -> None:
-    result = apply_recommendation_policy(make_analysis(action), owns_stock=False)
+    analysis = make_analysis(action)
+    analysis.decision_factors = [DecisionFactor(rank=1, role="support", point="Maintain the position.")]
+    result = apply_recommendation_policy(analysis, owns_stock=False)
     assert result.action == RecommendationAction.WATCH
+    assert result.summary.startswith("Watch:")
+    assert result.decision_factors == []
     assert any("normalized" in item for item in result.data_limitations)
 
 

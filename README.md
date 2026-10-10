@@ -24,6 +24,7 @@ background jobs can be replaced or extended for a future cloud product.
 - Optional comparison with up to three user-selected stocks, plus explicit fundamental and valuation assessments
 - Recent news headlines and summaries, publication dates, publishers, and source links (no additional API key)
 - News sentiment, source-linked catalysts and risks, and their impact on the recommendation and action plan
+- A decision-first view with up to three ranked factors; the full bull and bear cases remain available
 - Structured OpenAI Responses API output validated by Pydantic
 - Ownership-aware `BUY`, `HOLD`, `SELL`, and `WATCH` guardrails
 - Observable future-entry and thesis-invalidation conditions

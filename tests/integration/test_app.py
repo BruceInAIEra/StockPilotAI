@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.core.config import Settings
 from app.domain.analysis import (
     AnalysisRequest,
+    DecisionFactor,
     EvidenceItem,
     FutureEntryPlan,
     GeneratedAnalysis,
@@ -304,3 +305,25 @@ def test_untrusted_news_text_is_escaped_in_html(tmp_path):
         assert "<script>alert" not in page.text
         assert "&lt;script&gt;alert" in page.text
         assert "<img src=x" not in page.text
+
+
+def test_view_orders_cross_case_factors_by_decision_rank(tmp_path):
+    class RankedEngine(FakeAnalysisEngine):
+        def analyze(self, snapshot, request):
+            result = super().analyze(snapshot, request)
+            result.summary = "Buy: the current valuation is the decisive reason."
+            result.decision_factors = [
+                DecisionFactor(rank=3, role="support", point="Trend adds context."),
+                DecisionFactor(rank=1, role="support", point="Valuation supports an entry."),
+                DecisionFactor(rank=2, role="risk", point="Debt limits conviction."),
+            ]
+            return result
+
+    with make_client(tmp_path, analysis_engine=RankedEngine()) as client:
+        data = client.post("/api/v1/analyses", json={"symbol": "AAPL", "model": "test-model"}).json()
+        page = client.get(f"/analyses/{data['id']}").text
+        assert page.index("Buy: the current valuation") < page.index("Valuation supports an entry")
+        assert page.index("Valuation supports an entry") < page.index("Debt limits conviction")
+        assert page.index("Debt limits conviction") < page.index("Trend adds context")
+        assert "Full bull and bear cases" in page
+        assert data["analysis"]["decision_factors"][0]["rank"] == 3  # Raw model order is preserved in JSON.

@@ -38,6 +38,17 @@
       <article class="panel thesis-card">
         <span class="step">The view</span>
         <h2>{{ analysis.analysis.summary }}</h2>
+        {% if analysis.analysis.decision_factors %}
+          <ol class="decision-factors">
+            {% for factor in analysis.analysis.decision_factors|sort(attribute='rank') %}
+              <li>
+                <span class="data-caption">{{ factor.role|title }}</span>
+                <p>{{ factor.point }}</p>
+              </li>
+            {% endfor %}
+          </ol>
+          <details class="indicator-guide"><summary>Full bull and bear cases</summary>
+        {% endif %}
         <div class="case-grid">
           <div>
             <h3>Bull case</h3>
@@ -48,6 +59,7 @@
             <ul>{% for item in analysis.analysis.bear_case %}<li>{{ item }}</li>{% endfor %}</ul>
           </div>
         </div>
+        {% if analysis.analysis.decision_factors %}</details>{% endif %}
       </article>
 
       <aside class="panel entry-card">
