@@ -61,6 +61,26 @@ def apply_recommendation_policy(
             "the application normalized this to WATCH."
         )
 
+    if owns_stock and result.action == RecommendationAction.WATCH:
+        reason = result.summary.removeprefix("Watch:").strip()
+        result.action = RecommendationAction.HOLD
+        result.confidence = min(result.confidence, 0.55)
+        result.summary = (
+            "Hold: maintain the existing position while awaiting clearer evidence."
+            + (f" {reason}" if reason else "")
+        )
+        result.future_entry_plan.status = "Maintain position; wait before adding shares"
+        result.data_limitations.append(
+            "WATCH was normalized to HOLD for an existing position; this does not support adding shares."
+        )
+        if result.news_analysis and result.news_analysis.recommendation_impact.startswith(
+            "The application changed the short-term BUY to WATCH"
+        ):
+            result.news_analysis.recommendation_impact = (
+                "Current news could not be assessed reliably, so the application recommends "
+                "HOLD rather than adding shares."
+            )
+
     if result.action == RecommendationAction.WATCH and not result.future_entry_plan.conditions:
         result.future_entry_plan.conditions.append(
             "Wait for new market data that materially improves the risk/reward profile."

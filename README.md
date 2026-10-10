@@ -34,6 +34,13 @@ background jobs can be replaced or extended for a future cloud product.
 Not included yet: email, scheduled reports, user
 accounts, portfolios, multi-agent analysis, cloud infrastructure, or trading.
 
+Actions account for the ownership choice: `BUY` means buy or add shares; `HOLD`
+means maintain an existing position; `SELL` means exit an existing position; and
+`WATCH` means wait before opening a position. If evidence is too limited to
+support buying more of a stock you own, the app shows a lower-confidence `HOLD`
+and explains what needs review. It does not interpret uncertainty alone as a
+reason to sell.
+
 ## Requirements
 
 - Python 3.11 or newer
@@ -180,8 +187,9 @@ verified competitors; the analysis must address industry, currency, and period d
 
 Fundamental-data failures leave price analysis available and are disclosed. Missing
 or nonfinite values are not replaced with zero; nonpositive valuation multiples are
-omitted. Long-term BUY recommendations become WATCH when financial or valuation
-evidence is absent. Older saved analyses remain readable; rerun them to fetch fundamentals.
+omitted. Long-term BUY recommendations become WATCH for prospective positions or
+HOLD for existing positions when financial or valuation evidence is absent. Older
+saved analyses remain readable; rerun them to fetch fundamentals.
 
 ### News and catalysts
 
@@ -212,7 +220,8 @@ URL/title does not identify every syndicated retelling of the same event.
 
 News failures leave the rest of the report available. Empty, stale, unavailable, or
 unassessed news means unknown current sentiment; confidence is capped at 55% and a
-short-term BUY becomes WATCH until current event risks can be reviewed. This is an
+short-term BUY becomes WATCH for a prospective position or HOLD for an existing
+position until current event risks can be reviewed. This is an
 application guardrail, not a calibrated probability. Financially supported longer-term
 actions may remain, with reduced confidence. Older saved reports remain readable;
 run a new analysis to include news. No database migration or extra API key is required.

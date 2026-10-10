@@ -29,6 +29,17 @@ def test_missing_or_stale_news_is_unknown_and_blocks_short_term_buy(rows):
     assert "news" in result.future_entry_plan.conditions[0]
 
 
+def test_owner_missing_news_blocks_addition_and_returns_hold():
+    snapshot, generated = inputs([])
+    result = apply_recommendation_policy(generated, owns_stock=True, snapshot=snapshot,
+                                         horizon=InvestmentHorizon.SHORT_TERM)
+    assert result.action == RecommendationAction.HOLD
+    assert result.summary.startswith("Hold:")
+    assert result.confidence == .55
+    assert "HOLD" in result.news_analysis.recommendation_impact
+    assert "WATCH" not in result.news_analysis.recommendation_impact
+
+
 def test_missing_news_does_not_force_exit_or_remove_supported_long_term_buy():
     snapshot, generated = inputs([])
     for action, owns_stock in [(RecommendationAction.BUY, False), (RecommendationAction.HOLD, True),

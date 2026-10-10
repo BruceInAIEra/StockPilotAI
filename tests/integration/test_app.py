@@ -164,6 +164,26 @@ def test_html_form_redirects_to_result(tmp_path) -> None:
         assert "Example Wire" in detail.text
 
 
+def test_owned_position_does_not_display_watch(tmp_path) -> None:
+    class WatchEngine(FakeAnalysisEngine):
+        def analyze(self, snapshot, request):
+            result = super().analyze(snapshot, request)
+            result.action = RecommendationAction.WATCH
+            result.summary = "Watch: valuation is uncertain."
+            return result
+
+    with make_client(tmp_path, analysis_engine=WatchEngine()) as client:
+        data = client.post("/api/v1/analyses", json={
+            "symbol": "AAPL", "horizon": "medium_term", "owns_stock": True,
+            "model": "test-model",
+        }).json()
+        assert data["action"] == "HOLD"
+        assert data["analysis"]["summary"].startswith("Hold:")
+        page = client.get(f"/analyses/{data['id']}").text
+        assert "Current position" in page
+        assert "Hold: maintain the existing position" in page
+
+
 def test_disallowed_model_is_rejected(tmp_path) -> None:
     with make_client(tmp_path) as client:
         response = client.post(

@@ -87,6 +87,20 @@ def test_owner_action_is_preserved() -> None:
     assert result.action == RecommendationAction.HOLD
 
 
+def test_owner_watch_becomes_cautious_hold() -> None:
+    analysis = make_analysis(RecommendationAction.WATCH)
+    analysis.summary = "Watch: valuation evidence is incomplete."
+    analysis.decision_factors = [DecisionFactor(rank=1, role="uncertainty", point="Valuation is missing.")]
+    result = apply_recommendation_policy(analysis, owns_stock=True)
+    assert result.action == RecommendationAction.HOLD
+    assert result.summary.startswith("Hold:")
+    assert "valuation evidence is incomplete" in result.summary
+    assert result.confidence == 0.55
+    assert result.decision_factors == []
+    assert "Maintain position" in result.future_entry_plan.status
+    assert analysis.action == RecommendationAction.WATCH
+
+
 def test_empty_evidence_caps_confidence() -> None:
     analysis = make_analysis(RecommendationAction.WATCH)
     analysis.evidence = []
