@@ -44,6 +44,12 @@ class YahooFinanceProvider:
                     "includeAdjustedClose": "true",
                 },
             )
+            # Yahoo returns HTTP 404 for unknown/delisted tickers. Handle it
+            # before raise_for_status turns it into a generic provider outage.
+            if response.status_code == 404:
+                raise InvalidSymbolError(
+                    f"No market data was found for {symbol}. Check the stock ticker and try again."
+                )
             response.raise_for_status()
             payload = response.json()
         except httpx.TimeoutException as exc:

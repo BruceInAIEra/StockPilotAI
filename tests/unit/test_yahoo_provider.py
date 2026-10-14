@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from app.core.errors import InvalidSymbolError, MarketDataError
 from app.providers.market_data.yahoo import YahooFinanceProvider
 
 
@@ -82,3 +83,35 @@ def test_daily_change_falls_back_to_the_previous_daily_bar() -> None:
 
     assert snapshot.previous_close == 267.62
     assert snapshot.daily_change_percent == pytest.approx(12.2487, abs=0.0001)
+
+
+def test_unknown_ticker_404_is_not_reported_as_a_provider_outage() -> None:
+    def handler(request):
+        return httpx.Response(404, json={
+            "chart": {"result": None, "error": {
+                "code": "Not Found", "description": "No data found, symbol may be delisted",
+            }},
+        })
+
+    provider = YahooFinanceProvider()
+    provider._client.close()
+    provider._client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(InvalidSymbolError, match="MFST.*Check the stock ticker"):
+            provider.get_stock_snapshot("MFST")
+    finally:
+        provider.close()
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_provider_http_failure_remains_a_market_data_error(status) -> None:
+    provider = YahooFinanceProvider()
+    provider._client.close()
+    provider._client = httpx.Client(transport=httpx.MockTransport(
+        lambda request: httpx.Response(status, text="Upstream failure")
+    ))
+    try:
+        with pytest.raises(MarketDataError, match="temporarily unavailable"):
+            provider.get_stock_snapshot("MSFT")
+    finally:
+        provider.close()
