@@ -29,6 +29,7 @@ background jobs can be replaced or extended for a future cloud product.
 - Ownership-aware `BUY`, `HOLD`, `SELL`, and `WATCH` guardrails
 - Observable future-entry and thesis-invalidation conditions
 - Local SQLite analysis history
+- Immediate results page with background analysis and automatic completion updates
 - JSON API, health endpoint, migrations, tests, and Docker support
 
 Not included yet: email, scheduled reports, user
@@ -96,13 +97,22 @@ server after configuration changes. An existing explicit timeout in your `.env`
 or shell overrides the default. Server logs include model, symbol, elapsed time,
 and timeout configuration, without logging credentials or the analysis payload.
 
+HTML form submissions open a results page immediately while data collection and
+AI analysis run in the server's background thread pool. The page checks status
+every two seconds and refreshes once the analysis completes or fails. You can
+leave the page and reopen it from Recent analyses without starting another request.
+Without JavaScript, use the Refresh status link. Background jobs run in the local
+server process; keep it running until completion. An interrupted job is not resumed
+after a server restart and must be submitted again. The JSON creation API remains
+synchronous for existing API clients.
+
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/` | Local analysis UI |
-| `POST` | `/analyze` | Submit the HTML form |
-| `GET` | `/analyses/{id}` | Open a saved result |
+| `POST` | `/analyze` | Start background analysis and redirect immediately |
+| `GET` | `/analyses/{id}` | Open analysis progress or a saved result |
 | `GET` | `/api/v1/models` | Read configured model choices |
 | `POST` | `/api/v1/analyses` | Create a JSON analysis |
 | `GET` | `/api/v1/analyses` | List local history |
@@ -163,6 +173,12 @@ Tests use deterministic fake providers and do not spend OpenAI credits:
 
 ```bash
 pytest
+```
+
+With Node.js available, test the browser's status polling without external services:
+
+```bash
+node --test tests/js/test_app.cjs
 ```
 
 ## Current data limitations

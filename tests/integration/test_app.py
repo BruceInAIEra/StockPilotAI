@@ -1,8 +1,13 @@
 from datetime import UTC, datetime
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+
+import pytest
 
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
+from app.core.errors import AnalysisProviderError
 from app.domain.analysis import (
     AnalysisRequest,
     DecisionFactor,
@@ -162,6 +167,102 @@ def test_html_form_redirects_to_result(tmp_path) -> None:
         assert "https://example.com/guidance" in detail.text
         assert "Revenue guidance raised" in detail.text
         assert "Example Wire" in detail.text
+
+
+def test_results_page_loads_while_llm_is_still_running(tmp_path) -> None:
+    response_sent = Event()
+    engine_started = Event()
+    release_engine = Event()
+
+    class BlockingEngine(FakeAnalysisEngine):
+        def analyze(self, snapshot, request):
+            assert response_sent.is_set(), "Redirect must be sent before the LLM runs"
+            engine_started.set()
+            assert release_engine.wait(10), "Test did not release the engine"
+            return super().analyze(snapshot, request)
+
+    class ObserveResponse:
+        def __init__(self, app):
+            self.app = app
+
+        async def __call__(self, scope, receive, send):
+            async def observe(message):
+                await send(message)
+                if (scope.get("path") == "/analyze"
+                        and message["type"] == "http.response.body"
+                        and not message.get("more_body", False)):
+                    response_sent.set()
+
+            await self.app(scope, receive, observe)
+
+    test_client = make_client(tmp_path, analysis_engine=BlockingEngine())
+    test_client.app.add_middleware(ObserveResponse)
+    with test_client as client, ThreadPoolExecutor(max_workers=1) as pool:
+        # TestClient itself waits for background tasks, unlike a real browser.
+        submitted = pool.submit(client.post, "/analyze", data={
+            "symbol": "aapl", "horizon": "medium_term", "position": "not_owned",
+            "model": "test-model",
+        }, follow_redirects=False)
+        try:
+            assert engine_started.wait(5)
+            assert response_sent.is_set()
+            history = client.get("/api/v1/analyses").json()
+            assert len(history) == 1
+            analysis_id = history[0]["id"]
+            assert history[0]["status"] == "running"
+            page = client.get(f"/analyses/{analysis_id}")
+            assert page.status_code == 200
+            assert "Reviewing AAPL" in page.text
+            assert f'data-analysis-id="{analysis_id}"' in page.text
+            assert "This analysis could not be completed" not in page.text
+            assert client.get(f"/api/v1/analyses/{analysis_id}").json()["status"] == "running"
+            assert "running" in client.get("/").text
+        finally:
+            release_engine.set()
+        response = submitted.result(timeout=5)
+        assert response.status_code == 303
+        assert response.headers["location"] == f"/analyses/{analysis_id}"
+        assert client.get(f"/api/v1/analyses/{analysis_id}").json()["status"] == "completed"
+        page = client.get(response.headers["location"])
+        assert "Example Corporation" in page.text
+        assert "data-analysis-id" not in page.text
+        assert len(client.get("/api/v1/analyses").json()) == 1
+
+
+@pytest.mark.parametrize("failure,message", [
+    (AnalysisProviderError("The model timed out. Try again."), "The model timed out. Try again."),
+    (RuntimeError("private upstream details"), "Unexpected analysis failure"),
+])
+def test_background_failure_is_saved_and_displayed(tmp_path, failure, message):
+    class BrokenEngine:
+        def analyze(self, snapshot, request):
+            raise failure
+
+    with make_client(tmp_path, analysis_engine=BrokenEngine()) as client:
+        response = client.post("/analyze", data={
+            "symbol": "AAPL", "horizon": "medium_term", "position": "not_owned",
+            "model": "test-model",
+        }, follow_redirects=False)
+        assert response.status_code == 303
+        page = client.get(response.headers["location"])
+        assert page.status_code == 200
+        assert "This analysis could not be completed" in page.text
+        assert message in page.text
+        assert "private upstream details" not in page.text
+        assert "data-analysis-id" not in page.text
+        assert client.get("/api/v1/analyses").json()[0]["status"] == "failed"
+
+
+@pytest.mark.parametrize("overrides", [
+    {"symbol": "<script>"}, {"model": "not-allowed"}, {"horizon": "invalid"},
+])
+def test_invalid_form_does_not_start_a_background_analysis(tmp_path, overrides):
+    with make_client(tmp_path) as client:
+        data = {"symbol": "AAPL", "horizon": "medium_term", "position": "not_owned",
+                "model": "test-model"} | overrides
+        response = client.post("/analyze", data=data, follow_redirects=False)
+        assert response.status_code == 422
+        assert client.get("/api/v1/analyses").json() == []
 
 
 def test_owned_position_does_not_display_watch(tmp_path) -> None:

@@ -26,7 +26,16 @@
     </div>
   </section>
 
-  {% if analysis.analysis and analysis.market_data %}
+  {% if analysis.status.value == 'running' %}
+    <section class="panel analysis-pending" data-analysis-id="{{ analysis.id }}" aria-busy="true">
+      <span class="step">Analysis in progress</span>
+      <h2>Reviewing {{ analysis.symbol }}…</h2>
+      <p>We’re collecting market data, company financials, and news, then preparing your AI analysis. This can take a few minutes.</p>
+      <p data-poll-status role="status" aria-live="polite">Your result will appear automatically when it’s ready. You can leave this page and return through Recent analyses.</p>
+      <a href="/analyses/{{ analysis.id }}" class="back-link">Refresh status</a>
+      <noscript><p>Enable JavaScript for automatic updates, or refresh this page to check the result.</p></noscript>
+    </section>
+  {% elif analysis.analysis and analysis.market_data %}
     <section class="market-strip">
       <div><small>Price</small><strong>{{ analysis.market_data.currency }} {{ '%.2f'|format(analysis.market_data.current_price) }}</strong></div>
       <div><small>Daily move</small><strong class="{{ 'positive' if (analysis.market_data.daily_change_percent or 0) >= 0 else 'negative' }}">{{ '%+.2f'|format(analysis.market_data.daily_change_percent or 0) }}%</strong></div>
@@ -243,6 +252,6 @@
       </div>
     </details>
   {% else %}
-    <div class="alert"><strong>This analysis is incomplete.</strong><span>{{ analysis.error_message or 'Try running it again.' }}</span></div>
+    <div class="alert" role="alert"><strong>This analysis could not be completed.</strong><span>{{ analysis.error_message or 'Try running it again.' }}</span></div>
   {% endif %}
 {% endblock %}

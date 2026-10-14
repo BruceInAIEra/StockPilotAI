@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -49,6 +49,7 @@ def index(
 @router.post("/analyze", response_class=HTMLResponse)
 def analyze(
     request: Request,
+    background_tasks: BackgroundTasks,
     container: Annotated[AppContainer, Depends(get_container)],
     symbol: Annotated[str, Form()],
     horizon: Annotated[str, Form()],
@@ -73,7 +74,7 @@ def analyze(
             model=model,
             peer_symbols=[value.strip() for value in peer_symbols.split(",") if value.strip()],
         )
-        result = container.analysis_service.run(analysis_request)
+        result = container.analysis_service.create(analysis_request)
     except (ValidationError, ValueError) as exc:
         context["error"] = _validation_message(exc)
         return templates.TemplateResponse(
@@ -91,6 +92,9 @@ def analyze(
             status_code=502,
         )
 
+    background_tasks.add_task(
+        container.analysis_service.run_background, result.id, analysis_request
+    )
     return RedirectResponse(url=f"/analyses/{result.id}", status_code=303)
 
 

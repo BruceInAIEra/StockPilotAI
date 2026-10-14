@@ -125,7 +125,7 @@ def test_authentication_failure_is_not_retried(monkeypatch):
     assert clients[0].is_closed()
 
 
-def test_timeout_failure_is_saved_and_form_preserves_inputs(tmp_path, monkeypatch):
+def test_timeout_failure_is_saved_and_result_preserves_inputs(tmp_path, monkeypatch):
     def handler(request):
         raise httpx.ReadTimeout("temporary", request=request)
 
@@ -134,9 +134,11 @@ def test_timeout_failure_is_saved_and_form_preserves_inputs(tmp_path, monkeypatc
         response = client.post("/analyze", data={
             "symbol": "CEG", "horizon": "short_term", "position": "not_owned", "model": "test-model",
         })
-        assert response.status_code == 502
+        assert response.status_code == 200
         assert "180 seconds per attempt" in response.text
-        assert 'value="CEG"' in response.text
+        assert "CEG" in response.text
+        assert "Short Term" in response.text
+        assert "test-model" in response.text
         saved = client.get("/api/v1/analyses").json()[0]
         assert saved["status"] == "failed"
         assert "OPENAI_TIMEOUT_SECONDS" in saved["error_message"]

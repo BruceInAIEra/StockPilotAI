@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 from app.core.errors import StockPilotError
@@ -11,6 +12,8 @@ from app.providers.market_data.base import MarketDataProvider
 from app.providers.market_data.fundamentals import FundamentalsProvider, unavailable_fundamentals
 from app.providers.market_data.news import NewsProvider, unavailable_news
 from app.repositories.analysis_repository import AnalysisRepository
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisService:
@@ -31,13 +34,27 @@ class AnalysisService:
         self._news_provider = news_provider
 
     def run(self, request: AnalysisRequest) -> AnalysisView:
+        analysis = self.create(request)
+        return self._execute(analysis.id, request)
+
+    def create(self, request: AnalysisRequest) -> AnalysisView:
+        """Validate and persist the job before any slow provider calls."""
         if request.model not in self._allowed_models:
             allowed = ", ".join(self._allowed_models)
             raise ValueError(f"Model '{request.model}' is not allowed. Choose one of: {allowed}")
 
         analysis_id = str(uuid4())
         self._repository.create_running(analysis_id, request)
+        return self._repository.get(analysis_id)
 
+    def run_background(self, analysis_id: str, request: AnalysisRequest) -> None:
+        try:
+            self._execute(analysis_id, request)
+        except Exception:
+            # _execute saves the failure; the initial HTTP response is already sent.
+            logger.error("Background analysis failed: id=%s symbol=%s", analysis_id, request.symbol)
+
+    def _execute(self, analysis_id: str, request: AnalysisRequest) -> AnalysisView:
         try:
             snapshot = self._market_data.get_stock_snapshot(request.symbol)
             if self._fundamentals_provider:
