@@ -42,6 +42,16 @@ support buying more of a stock you own, the app shows a lower-confidence `HOLD`
 and explains what needs review. It does not interpret uncertainty alone as a
 reason to sell.
 
+The model weighs the strongest buy, maintain, and exit cases. Mixed evidence alone
+does not default to WATCH/HOLD, and ownership alone does not justify maintaining
+a position. Supported business deterioration, financing risk, or valuation concerns
+can justify SELL; BUY does not require all indicators to be positive. Optional
+context such as peer comparisons is distinguished from decision-critical missing
+data. The financial and news safeguards below still apply, and no action quotas
+are imposed. For non-owners, a negative ownership thesis is described as "avoid
+opening a position" under WATCH. Prompt changes affect new analyses only; saved
+reports are not rewritten.
+
 ## Requirements
 
 - Python 3.11 or newer
