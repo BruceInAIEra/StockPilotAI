@@ -114,7 +114,7 @@ def test_health_and_home(tmp_path) -> None:
         assert client.get("/health").json() == {"status": "ok"}
         response = client.get("/")
         assert response.status_code == 200
-        assert "Turn a ticker into a clear next step" in response.text
+        assert "Turn a stock symbol into a clear next step" in response.text
 
 
 def test_create_and_retrieve_analysis(tmp_path) -> None:
@@ -179,7 +179,7 @@ def test_results_page_loads_while_llm_is_still_running(tmp_path) -> None:
         calls = 0
 
         def get_stock_snapshot(self, symbol):
-            assert not response_sent.is_set(), "Ticker must be checked before redirecting"
+            assert not response_sent.is_set(), "Stock symbol must be checked before redirecting"
             self.calls += 1
             return super().get_stock_snapshot(symbol)
 
@@ -244,7 +244,7 @@ def test_results_page_loads_while_llm_is_still_running(tmp_path) -> None:
 
 
 @pytest.mark.parametrize("failure,status", [
-    (InvalidSymbolError("No market data was found for MFST. Check the stock ticker."), 422),
+    (InvalidSymbolError("No market data was found for MFST. Check the stock symbol."), 422),
     (MarketDataError("Market data is temporarily unavailable."), 502),
     (MarketDataError("Market data timed out. Please try again."), 502),
 ])
@@ -259,7 +259,7 @@ def test_ticker_check_failure_stays_on_form_without_starting_analysis(tmp_path, 
 
         def analyze(self, snapshot, request):
             self.calls += 1
-            raise AssertionError("LLM must not run when ticker validation fails")
+            raise AssertionError("LLM must not run when stock symbol validation fails")
 
     engine = UnusedEngine()
     with make_client(tmp_path, market_provider=BrokenMarketProvider(),

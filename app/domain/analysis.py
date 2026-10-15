@@ -48,7 +48,7 @@ class AnalysisRequest(BaseModel):
     def normalize_symbol(cls, value: str) -> str:
         symbol = value.strip().upper()
         if not re.fullmatch(r"[A-Z0-9.\-^=]{1,15}", symbol):
-            raise ValueError("Enter a valid ticker such as AAPL, BRK.B, or BTC-USD")
+            raise ValueError("Enter a valid stock symbol such as AAPL, BRK.B, or BTC-USD")
         return symbol
 
     @field_validator("model")

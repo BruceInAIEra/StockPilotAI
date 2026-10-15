@@ -3,7 +3,7 @@
 {% block content %}
   <section class="hero">
     <div class="eyebrow">AI-assisted market research</div>
-    <h1>Turn a ticker into a clear next step.</h1>
+    <h1>Turn a stock symbol into a clear next step.</h1>
     <p>
       StockPilotAI combines company fundamentals, valuation, news, price indicators, and a
       structured AI review to suggest Buy, Hold, Sell, or Watch.
@@ -28,7 +28,7 @@
       {% endif %}
 
       <form action="/analyze" method="post" id="analysis-form">
-        <label for="symbol">Stock ticker</label>
+        <label for="symbol">Stock symbol</label>
         <div class="ticker-input">
           <span>$</span>
           <input
@@ -44,12 +44,12 @@
             autofocus
           >
         </div>
-        <p class="field-help">Use a market ticker such as AAPL, MSFT, or BRK.B.</p>
+        <p class="field-help">Use a stock symbol such as AAPL, MSFT, or BRK.B.</p>
 
         <label for="peer_symbols">Compare with other stocks <small>(optional)</small></label>
         <input id="peer_symbols" name="peer_symbols" type="text" maxlength="60"
                placeholder="MSFT, GOOGL" value="{{ form.peer_symbols if form else '' }}">
-        <p class="field-help">Up to three comma-separated tickers. Choose companies with comparable businesses.</p>
+        <p class="field-help">Up to three comma-separated stock symbols. Choose companies with comparable businesses.</p>
 
         <fieldset>
           <legend>Investment horizon</legend>
@@ -95,7 +95,7 @@
 
         <button class="primary-button" type="submit" id="analyze-button">
           <span class="button-label">Analyze stock</span>
-          <span class="button-loading" aria-hidden="true">Checking ticker…</span>
+          <span class="button-loading" aria-hidden="true">Checking stock symbol…</span>
         </button>
       </form>
     </section>

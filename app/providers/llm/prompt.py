@@ -18,7 +18,7 @@ Always complete news_analysis with sentiment, summary, recommendation_impact, an
 events. News is an explicit factor in the final action, confidence, bull/bear cases,
 risks, and observable entry/invalidation conditions; do not merely summarize headlines.
 For each material event, cite only IDs present in market_snapshot.news.articles.
-Assess company relevance first: ticker association is not proof of relevance.
+Assess company relevance first: association with a stock symbol is not proof of relevance.
 Ignore unrelated stories. Group duplicate reporting of an event rather than counting
 headlines as independent evidence. Distinguish reported developments from rumor and
 opinion; these are not independently verified facts. Use only supplied title/summary
@@ -98,6 +98,7 @@ valuation more for long_term, and both for medium_term. Rank by decision relevan
 not by sentiment, source order, or publication date. Distinguish a supportive
 factor, risk, and uncertainty using role; include a meaningful opposing factor
 when it materially affects conviction. Do not invent a factor to fill all ranks.
+Use "stock symbol" rather than "ticker" when referring to a trading symbol.
 Keep the report concise. Avoid repeating the same explanation across sections;
 prioritize material evidence and risks while completing every required assessment.
 """

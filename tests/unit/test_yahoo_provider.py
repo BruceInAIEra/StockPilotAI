@@ -97,7 +97,7 @@ def test_unknown_ticker_404_is_not_reported_as_a_provider_outage() -> None:
     provider._client.close()
     provider._client = httpx.Client(transport=httpx.MockTransport(handler))
     try:
-        with pytest.raises(InvalidSymbolError, match="MFST.*Check the stock ticker"):
+        with pytest.raises(InvalidSymbolError, match="MFST.*Check the stock symbol"):
             provider.get_stock_snapshot("MFST")
     finally:
         provider.close()

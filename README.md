@@ -14,7 +14,7 @@ background jobs can be replaced or extended for a future cloud product.
 ## MVP features
 
 - Local FastAPI web interface at `http://127.0.0.1:8000`
-- Stock ticker, investment horizon, ownership status, and model selection
+- Stock symbol, investment horizon, ownership status, and model selection
 - One year of price history through a replaceable Yahoo chart adapter
 - SMA 20/50/200, one/three/twelve-month returns, RSI 14, and volatility
 - Company fundamentals through Yahoo Finance / yfinance (no additional API key)
@@ -97,8 +97,8 @@ server after configuration changes. An existing explicit timeout in your `.env`
 or shell overrides the default. Server logs include model, symbol, elapsed time,
 and timeout configuration, without logging credentials or the analysis payload.
 
-HTML form submissions first check ticker availability by fetching price history.
-Invalid tickers and market-data errors appear on the form with your inputs preserved;
+HTML form submissions first check stock symbol availability by fetching price history.
+Invalid stock symbols and market-data errors appear on the form with your inputs preserved;
 no background analysis is created. Once the check succeeds, the results page opens
 while financial/news collection and AI analysis run in the server's background
 thread pool. The validated price snapshot is reused. The page checks status
@@ -114,7 +114,7 @@ synchronous for existing API clients.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/` | Local analysis UI |
-| `POST` | `/analyze` | Check ticker, then start background analysis and redirect |
+| `POST` | `/analyze` | Check stock symbol, then start background analysis and redirect |
 | `GET` | `/analyses/{id}` | Open analysis progress or a saved result |
 | `GET` | `/api/v1/models` | Read configured model choices |
 | `POST` | `/api/v1/analyses` | Create a JSON analysis |
@@ -212,9 +212,9 @@ saved analyses remain readable; rerun them to fetch fundamentals.
 
 ### News and catalysts
 
-Each new analysis requests a sample of recent ticker-associated news through yfinance.
-If the ticker stream fails or is empty, the adapter tries Yahoo news search once
-with a 15-second timeout and labels the fallback. Explicitly unrelated ticker tags
+Each new analysis requests a sample of recent news associated with the stock symbol through yfinance.
+If the stock symbol news stream fails or is empty, the adapter tries Yahoo news search once
+with a 15-second timeout and labels the fallback. Explicitly unrelated stock symbol tags
 are excluded; the model must still assess each article's relevance.
 It includes up to 20 unique articles published within the previous 30 days, ordered
 newest first. Articles need a title, publisher, safe HTTP(S) source URL, and valid

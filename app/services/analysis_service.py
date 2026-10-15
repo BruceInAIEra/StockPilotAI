@@ -46,7 +46,7 @@ class AnalysisService:
         return self._repository.get(analysis_id)
 
     def prepare(self, request: AnalysisRequest) -> tuple[AnalysisView, StockSnapshot]:
-        """Verify ticker availability before creating a background analysis."""
+        """Verify stock symbol availability before creating a background analysis."""
         self._validate_model(request)
         snapshot = self._market_data.get_stock_snapshot(request.symbol)
         return self.create(request), snapshot

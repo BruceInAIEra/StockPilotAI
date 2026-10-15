@@ -43,7 +43,7 @@ def clean_text(value: object, limit: int) -> str:
 
 
 class YahooNewsProvider:
-    """A bounded, timestamped sample of ticker-associated headlines and summaries."""
+    """A bounded, timestamped sample of headlines associated with a stock symbol and summaries."""
 
     def __init__(self, ticker_factory: Callable | None = None,
                  clock: Callable[[], datetime] | None = None,
@@ -67,10 +67,10 @@ class YahooNewsProvider:
             if not isinstance(raw, list):
                 raise ValueError("Invalid news response")
         except Exception:
-            logger.warning("Ticker news unavailable for %s", symbol)
+            logger.warning("Stock symbol news unavailable for %s", symbol)
             raw = None
 
-        # Yahoo's ticker stream can silently return an empty list. Its search
+        # Yahoo's stock symbol news stream can silently return an empty list. Its search
         # endpoint offers a second, bounded route to publisher-linked news.
         used_search = False
         if not raw:
@@ -93,13 +93,13 @@ class YahooNewsProvider:
                 return result
 
         result.limitations = [
-            "Limited ticker-associated news sample, not comprehensive company, industry, or macro coverage. Relevance must be assessed.",
+            "Limited news sample associated with the stock symbol, not comprehensive company, industry, or macro coverage. Relevance must be assessed.",
             "Only supplied headlines and summaries were reviewed, not full articles or independent verification. Reports may be incomplete or disputed.",
             "Publication time may differ from event time. News sentiment does not establish price impact or whether an event is already priced in.",
         ]
         if used_search:
             result.source = "Yahoo Finance news search via yfinance"
-            result.limitations.append("The ticker news stream was empty or unavailable; news search was used as a fallback.")
+            result.limitations.append("The stock symbol news stream was empty or unavailable; news search was used as a fallback.")
         candidates = []
         skipped = 0
         for row in raw:
