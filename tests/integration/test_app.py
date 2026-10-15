@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
-from app.core.errors import AnalysisProviderError
+from app.core.errors import AnalysisProviderError, InvalidSymbolError, MarketDataError
 from app.domain.analysis import (
     AnalysisRequest,
     DecisionFactor,
@@ -91,7 +91,8 @@ class FakeAnalysisEngine:
         )
 
 
-def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news_provider=None) -> TestClient:
+def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news_provider=None,
+                market_provider=None) -> TestClient:
     settings = Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         openai_api_key="test-key",
@@ -100,7 +101,7 @@ def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news
     )
     app = create_app(
         settings=settings,
-        market_provider=FakeMarketProvider(),
+        market_provider=market_provider or FakeMarketProvider(),
         analysis_engine=analysis_engine or FakeAnalysisEngine(),
         fundamentals_provider=fundamentals_provider or YahooFundamentalsProvider(ticker_factory=lambda symbol: FakeTicker()),
         news_provider=news_provider or FakeNewsProvider(),
@@ -174,9 +175,20 @@ def test_results_page_loads_while_llm_is_still_running(tmp_path) -> None:
     engine_started = Event()
     release_engine = Event()
 
+    class CountingMarketProvider(FakeMarketProvider):
+        calls = 0
+
+        def get_stock_snapshot(self, symbol):
+            assert not response_sent.is_set(), "Ticker must be checked before redirecting"
+            self.calls += 1
+            return super().get_stock_snapshot(symbol)
+
+    market_provider = CountingMarketProvider()
+
     class BlockingEngine(FakeAnalysisEngine):
         def analyze(self, snapshot, request):
             assert response_sent.is_set(), "Redirect must be sent before the LLM runs"
+            assert market_provider.calls == 1
             engine_started.set()
             assert release_engine.wait(10), "Test did not release the engine"
             return super().analyze(snapshot, request)
@@ -195,7 +207,8 @@ def test_results_page_loads_while_llm_is_still_running(tmp_path) -> None:
 
             await self.app(scope, receive, observe)
 
-    test_client = make_client(tmp_path, analysis_engine=BlockingEngine())
+    test_client = make_client(tmp_path, analysis_engine=BlockingEngine(),
+                              market_provider=market_provider)
     test_client.app.add_middleware(ObserveResponse)
     with test_client as client, ThreadPoolExecutor(max_workers=1) as pool:
         # TestClient itself waits for background tasks, unlike a real browser.
@@ -227,6 +240,45 @@ def test_results_page_loads_while_llm_is_still_running(tmp_path) -> None:
         assert "Example Corporation" in page.text
         assert "data-analysis-id" not in page.text
         assert len(client.get("/api/v1/analyses").json()) == 1
+        assert market_provider.calls == 1
+
+
+@pytest.mark.parametrize("failure,status", [
+    (InvalidSymbolError("No market data was found for MFST. Check the stock ticker."), 422),
+    (MarketDataError("Market data is temporarily unavailable."), 502),
+    (MarketDataError("Market data timed out. Please try again."), 502),
+])
+def test_ticker_check_failure_stays_on_form_without_starting_analysis(tmp_path, failure, status):
+    class BrokenMarketProvider:
+        def get_stock_snapshot(self, symbol):
+            assert symbol == "MFST"
+            raise failure
+
+    class UnusedEngine:
+        calls = 0
+
+        def analyze(self, snapshot, request):
+            self.calls += 1
+            raise AssertionError("LLM must not run when ticker validation fails")
+
+    engine = UnusedEngine()
+    with make_client(tmp_path, market_provider=BrokenMarketProvider(),
+                     analysis_engine=engine) as client:
+        response = client.post("/analyze", data={
+            "symbol": "MFST", "horizon": "long_term", "position": "owned",
+            "model": "test-model", "peer_symbols": "AAPL, GOOGL",
+        }, follow_redirects=False)
+        assert response.status_code == status
+        assert "location" not in response.headers
+        assert 'id="analysis-form"' in response.text
+        assert str(failure) in response.text
+        assert 'value="MFST"' in response.text
+        assert 'value="long_term" checked' in response.text
+        assert 'value="owned" checked' in response.text
+        assert 'value="test-model" selected' in response.text
+        assert 'value="AAPL, GOOGL"' in response.text
+        assert client.get("/api/v1/analyses").json() == []
+        assert engine.calls == 0
 
 
 @pytest.mark.parametrize("failure,message", [
@@ -257,12 +309,21 @@ def test_background_failure_is_saved_and_displayed(tmp_path, failure, message):
     {"symbol": "<script>"}, {"model": "not-allowed"}, {"horizon": "invalid"},
 ])
 def test_invalid_form_does_not_start_a_background_analysis(tmp_path, overrides):
-    with make_client(tmp_path) as client:
+    class UnusedMarketProvider:
+        calls = 0
+
+        def get_stock_snapshot(self, symbol):
+            self.calls += 1
+            raise AssertionError("Invalid form must not call the provider")
+
+    market_provider = UnusedMarketProvider()
+    with make_client(tmp_path, market_provider=market_provider) as client:
         data = {"symbol": "AAPL", "horizon": "medium_term", "position": "not_owned",
                 "model": "test-model"} | overrides
         response = client.post("/analyze", data=data, follow_redirects=False)
         assert response.status_code == 422
         assert client.get("/api/v1/analyses").json() == []
+        assert market_provider.calls == 0
 
 
 def test_owned_position_does_not_display_watch(tmp_path) -> None:

@@ -6,6 +6,7 @@ from uuid import uuid4
 from app.core.errors import StockPilotError
 from app.domain.analysis import AnalysisRequest, AnalysisView
 from app.domain.fundamentals import FundamentalsSnapshot
+from app.domain.market_data import StockSnapshot
 from app.domain.recommendation import apply_recommendation_policy
 from app.providers.llm.base import AnalysisEngine
 from app.providers.market_data.base import MarketDataProvider
@@ -39,24 +40,37 @@ class AnalysisService:
 
     def create(self, request: AnalysisRequest) -> AnalysisView:
         """Validate and persist the job before any slow provider calls."""
-        if request.model not in self._allowed_models:
-            allowed = ", ".join(self._allowed_models)
-            raise ValueError(f"Model '{request.model}' is not allowed. Choose one of: {allowed}")
-
+        self._validate_model(request)
         analysis_id = str(uuid4())
         self._repository.create_running(analysis_id, request)
         return self._repository.get(analysis_id)
 
-    def run_background(self, analysis_id: str, request: AnalysisRequest) -> None:
+    def prepare(self, request: AnalysisRequest) -> tuple[AnalysisView, StockSnapshot]:
+        """Verify ticker availability before creating a background analysis."""
+        self._validate_model(request)
+        snapshot = self._market_data.get_stock_snapshot(request.symbol)
+        return self.create(request), snapshot
+
+    def _validate_model(self, request: AnalysisRequest) -> None:
+        if request.model not in self._allowed_models:
+            allowed = ", ".join(self._allowed_models)
+            raise ValueError(f"Model '{request.model}' is not allowed. Choose one of: {allowed}")
+
+    def run_background(
+        self, analysis_id: str, request: AnalysisRequest, snapshot: StockSnapshot | None = None
+    ) -> None:
         try:
-            self._execute(analysis_id, request)
+            self._execute(analysis_id, request, snapshot)
         except Exception:
             # _execute saves the failure; the initial HTTP response is already sent.
             logger.error("Background analysis failed: id=%s symbol=%s", analysis_id, request.symbol)
 
-    def _execute(self, analysis_id: str, request: AnalysisRequest) -> AnalysisView:
+    def _execute(
+        self, analysis_id: str, request: AnalysisRequest, snapshot: StockSnapshot | None = None
+    ) -> AnalysisView:
         try:
-            snapshot = self._market_data.get_stock_snapshot(request.symbol)
+            if snapshot is None:
+                snapshot = self._market_data.get_stock_snapshot(request.symbol)
             if self._fundamentals_provider:
                 snapshot.fundamentals = self._get_fundamentals(request.symbol)
                 snapshot.peer_fundamentals = [

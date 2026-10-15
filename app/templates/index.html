@@ -22,7 +22,7 @@
 
       {% if error %}
         <div class="alert" role="alert">
-          <strong>Analysis could not be completed.</strong>
+          <strong>Analysis could not be started.</strong>
           <span>{{ error }}</span>
         </div>
       {% endif %}
@@ -95,7 +95,7 @@
 
         <button class="primary-button" type="submit" id="analyze-button">
           <span class="button-label">Analyze stock</span>
-          <span class="button-loading" aria-hidden="true">Starting analysis…</span>
+          <span class="button-loading" aria-hidden="true">Checking ticker…</span>
         </button>
       </form>
     </section>

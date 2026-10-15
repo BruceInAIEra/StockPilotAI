@@ -6,7 +6,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
 from app.api.dependencies import AppContainer, get_container
-from app.core.errors import AnalysisNotFoundError, StockPilotError
+from app.core.errors import AnalysisNotFoundError, InvalidSymbolError, StockPilotError
 from app.domain.analysis import AnalysisRequest, InvestmentHorizon
 
 router = APIRouter(tags=["pages"])
@@ -74,8 +74,8 @@ def analyze(
             model=model,
             peer_symbols=[value.strip() for value in peer_symbols.split(",") if value.strip()],
         )
-        result = container.analysis_service.create(analysis_request)
-    except (ValidationError, ValueError) as exc:
+        result, snapshot = container.analysis_service.prepare(analysis_request)
+    except (ValidationError, ValueError, InvalidSymbolError) as exc:
         context["error"] = _validation_message(exc)
         return templates.TemplateResponse(
             request=request,
@@ -93,7 +93,7 @@ def analyze(
         )
 
     background_tasks.add_task(
-        container.analysis_service.run_background, result.id, analysis_request
+        container.analysis_service.run_background, result.id, analysis_request, snapshot
     )
     return RedirectResponse(url=f"/analyses/{result.id}", status_code=303)
 
@@ -120,7 +120,7 @@ def analysis_detail(
     )
 
 
-def _validation_message(exc: ValidationError | ValueError) -> str:
+def _validation_message(exc: ValidationError | ValueError | InvalidSymbolError) -> str:
     if isinstance(exc, ValidationError):
         errors = exc.errors()
         if errors:

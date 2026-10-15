@@ -97,8 +97,11 @@ server after configuration changes. An existing explicit timeout in your `.env`
 or shell overrides the default. Server logs include model, symbol, elapsed time,
 and timeout configuration, without logging credentials or the analysis payload.
 
-HTML form submissions open a results page immediately while data collection and
-AI analysis run in the server's background thread pool. The page checks status
+HTML form submissions first check ticker availability by fetching price history.
+Invalid tickers and market-data errors appear on the form with your inputs preserved;
+no background analysis is created. Once the check succeeds, the results page opens
+while financial/news collection and AI analysis run in the server's background
+thread pool. The validated price snapshot is reused. The page checks status
 every two seconds and refreshes once the analysis completes or fails. You can
 leave the page and reopen it from Recent analyses without starting another request.
 Without JavaScript, use the Refresh status link. Background jobs run in the local
@@ -111,7 +114,7 @@ synchronous for existing API clients.
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/` | Local analysis UI |
-| `POST` | `/analyze` | Start background analysis and redirect immediately |
+| `POST` | `/analyze` | Check ticker, then start background analysis and redirect |
 | `GET` | `/analyses/{id}` | Open analysis progress or a saved result |
 | `GET` | `/api/v1/models` | Read configured model choices |
 | `POST` | `/api/v1/analyses` | Create a JSON analysis |
