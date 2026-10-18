@@ -37,7 +37,9 @@ services:
     env_file:
       - path: .env
         required: false
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     ports:
       - "127.0.0.1:${STOCKPILOT_WEB_PORT:-8001}:8000"
     depends_on:

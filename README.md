@@ -99,7 +99,9 @@ Uvicorn server on port 8000 can continue running. Set `STOCKPILOT_WEB_PORT` to
 override the Docker app's host port if needed.
 
 The web container reads OpenAI settings from your existing `.env` if present.
-Set a valid `OPENAI_API_KEY` there to generate real analyses. Compose overrides
+Set a valid `OPENAI_API_KEY` there or export it in the shell running Compose to
+generate real analyses; a shell value takes precedence. After changing the key,
+run `docker compose up -d --force-recreate web` to load the new value. Compose overrides
 `DATABASE_URL` to use PostgreSQL; your `.env` and existing SQLite history are not
 modified or imported. The image includes the PostgreSQL driver and excludes `.env`
 and local data from its build context. PostgreSQL is published only on localhost
