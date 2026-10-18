@@ -57,12 +57,20 @@ def create_app(
     async def lifespan(_: FastAPI):
         Path("data").mkdir(exist_ok=True)
         engine = session_factory.kw["bind"]
-        Base.metadata.create_all(engine)
-        yield
-        close = getattr(configured_market_provider, "close", None)
-        if close:
-            close()
-        engine.dispose()
+        try:
+            # Only the local SQLite workflow creates its schema automatically.
+            # PostgreSQL and production deployments must run Alembic first.
+            if (settings.app_env in {"development", "test"}
+                    and settings.database_url.startswith("sqlite")):
+                Base.metadata.create_all(engine)
+            yield
+        finally:
+            try:
+                close = getattr(configured_market_provider, "close", None)
+                if close:
+                    close()
+            finally:
+                engine.dispose()
 
     application = FastAPI(
         title=settings.app_name,
@@ -73,6 +81,7 @@ def create_app(
         settings=settings,
         analysis_service=analysis_service,
     )
+    application.state.session_factory = session_factory
     application.mount("/static", StaticFiles(directory="app/static"), name="static")
     application.include_router(health.router)
     application.include_router(api.router)

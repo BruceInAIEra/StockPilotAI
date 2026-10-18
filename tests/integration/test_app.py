@@ -92,8 +92,8 @@ class FakeAnalysisEngine:
 
 
 def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news_provider=None,
-                market_provider=None) -> TestClient:
-    settings = Settings(
+                market_provider=None, settings=None) -> TestClient:
+    settings = settings or Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         openai_api_key="test-key",
         openai_default_model="test-model",
@@ -112,9 +112,32 @@ def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news
 def test_health_and_home(tmp_path) -> None:
     with make_client(tmp_path) as client:
         assert client.get("/health").json() == {"status": "ok"}
+        assert client.get("/ready").status_code == 200
         response = client.get("/")
         assert response.status_code == 200
         assert "Turn a stock symbol into a clear next step" in response.text
+
+
+def test_production_requires_migrations_and_closes_provider(tmp_path):
+    class ClosingProvider(FakeMarketProvider):
+        closed = False
+
+        def close(self):
+            self.closed = True
+
+    provider = ClosingProvider()
+    settings = Settings(
+        _env_file=None,
+        app_env="production",
+        database_url=f"sqlite:///{tmp_path / 'unmigrated.db'}",
+        openai_api_key=None,
+    )
+    with make_client(tmp_path, settings=settings, market_provider=provider) as client:
+        assert client.get("/health").status_code == 200
+        response = client.get("/ready")
+        assert response.status_code == 503
+        assert response.json() == {"status": "not_ready"}
+    assert provider.closed
 
 
 def test_create_and_retrieve_analysis(tmp_path) -> None:

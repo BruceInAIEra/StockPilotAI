@@ -82,6 +82,59 @@ Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
 The database is created at `data/stockpilot.db`. It persists after the local server
 stops and is ignored by Git.
 
+## Run with Docker and PostgreSQL
+
+Install and start Docker Desktop, then run from the repository root:
+
+```bash
+docker compose up --build -d web
+docker compose ps -a
+```
+
+Open [http://localhost:8001](http://localhost:8001). Compose starts PostgreSQL,
+waits for it to be healthy, runs `alembic upgrade head` in a dedicated migration
+container, and starts the app only after migration succeeds. The migration
+container exiting with code 0 is expected. Docker uses port 8001 so a local
+Uvicorn server on port 8000 can continue running. Set `STOCKPILOT_WEB_PORT` to
+override the Docker app's host port if needed.
+
+The web container reads OpenAI settings from your existing `.env` if present.
+Set a valid `OPENAI_API_KEY` there to generate real analyses. Compose overrides
+`DATABASE_URL` to use PostgreSQL; your `.env` and existing SQLite history are not
+modified or imported. The image includes the PostgreSQL driver and excludes `.env`
+and local data from its build context. PostgreSQL is published only on localhost
+port 5433, and the web app only on localhost port 8001 by default. The credentials in
+`compose.yaml` are for local development only.
+
+```bash
+# View logs and check database readiness.
+docker compose logs --tail=100 web migrate
+curl --fail http://localhost:8001/ready
+
+# Run the Python suite, including real PostgreSQL migrations and persistence.
+# Fake market and AI providers are used; no OpenAI credits are spent.
+docker compose run --build --rm tests
+
+# Stop containers; PostgreSQL data remains in the named Docker volume.
+docker compose down
+```
+
+Avoid `docker compose down -v` unless you intend to delete the local PostgreSQL
+database. The test suite uses temporary, isolated schemas and cleans them up.
+Run `docker compose up --build -d web` again after application or migration changes.
+
+To run Python on your laptop against the containerized database instead:
+
+```bash
+docker compose up -d db
+python -m pip install -e '.[dev,cloud]'
+export DATABASE_URL='postgresql+psycopg://stockpilot:local-dev-only@localhost:5433/stockpilot'
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Unset `DATABASE_URL` in that terminal to return to your `.env` database setting.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -91,7 +144,8 @@ stops and is ignored by Git.
 | `OPENAI_ALLOWED_MODELS` | `gpt-6.1-sol,gpt-6-luna,gpt-5-mini` | Comma-separated model allowlist |
 | `OPENAI_TIMEOUT_SECONDS` | `180` | OpenAI read timeout per attempt in seconds (maximum 600) |
 | `OPENAI_MAX_RETRIES` | `1` | Additional attempts for retryable OpenAI failures (0–2) |
-| `DATABASE_URL` | `sqlite:///data/stockpilot.db` | SQLite locally; PostgreSQL later |
+| `DATABASE_URL` | `sqlite:///data/stockpilot.db` | SQLite locally or PostgreSQL using `postgresql+psycopg://...` |
+| `APP_ENV` | `development` | Automatic table creation is limited to SQLite in `development` or `test`; other environments require migrations |
 | `MARKET_DATA_TIMEOUT_SECONDS` | `20` | Market-data request timeout |
 
 Model availability depends on the OpenAI project associated with your API key. Edit
@@ -131,6 +185,7 @@ synchronous for existing API clients.
 | `GET` | `/api/v1/analyses` | List local history |
 | `GET` | `/api/v1/analyses/{id}` | Retrieve one analysis |
 | `GET` | `/health` | Health check |
+| `GET` | `/ready` | Database and required-table readiness; returns 503 until available |
 
 Example JSON request:
 
@@ -170,15 +225,19 @@ StockPilotAI/
 
 ## Database migrations
 
-The application creates the initial table automatically for a convenient local start.
+The application creates the initial table automatically only for SQLite in
+`development` or `test`, for a convenient local start.
 Alembic is included for controlled schema changes:
 
 ```bash
 alembic upgrade head
 ```
 
-For a cloud release, change `DATABASE_URL` to PostgreSQL and run migrations during
-deployment. Do not put SQLite on an ephemeral container filesystem.
+PostgreSQL always requires migrations. For a cloud release, set `APP_ENV=production`,
+use a `postgresql+psycopg://...` database URL, and run migrations in a dedicated
+deployment task before starting the web service. Do not put SQLite on an ephemeral
+container filesystem. `/health` checks the process; `/ready` also verifies database
+access and the analyses table without returning connection details.
 
 ## Tests
 
