@@ -1,0 +1,4 @@
+aws-cdk-lib==2.271.0
+constructs==10.5.0
+cfn-lint==1.40.4
+pytest==8.4.2

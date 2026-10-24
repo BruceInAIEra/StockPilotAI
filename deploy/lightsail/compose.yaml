@@ -1,0 +1,81 @@
+name: stockpilot
+
+x-app-environment: &app-environment
+  APP_ENV: production
+  DATABASE_URL: postgresql+psycopg://stockpilot:${POSTGRES_PASSWORD:?required}@db:5432/stockpilot
+  OPENAI_API_KEY: ${OPENAI_API_KEY:?required}
+  OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL:-gpt-5-mini}
+  OPENAI_ALLOWED_MODELS: ${OPENAI_ALLOWED_MODELS:-gpt-5-mini}
+
+x-logging: &logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: stockpilot
+      POSTGRES_DB: stockpilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U stockpilot -d stockpilot]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  migrate:
+    image: ${APP_IMAGE:?required}
+    environment: *app-environment
+    command: [alembic, upgrade, head]
+    depends_on:
+      db:
+        condition: service_healthy
+    logging: *logging
+
+  web:
+    image: ${APP_IMAGE:?required}
+    restart: unless-stopped
+    environment: *app-environment
+    volumes:
+      - market_cache:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 60s
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
+    restart: unless-stopped
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?required}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    logging: *logging
+
+volumes:
+  postgres_data:
+  market_cache:
+  caddy_data:
+  caddy_config:

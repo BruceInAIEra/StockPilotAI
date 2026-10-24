@@ -21,6 +21,13 @@ __pycache__/
 htmlcov/
 dist/
 build/
+cdk.out/
+node_modules/
+*.dump
+runtime.env
+release.env
+previous-release.env
+deploy.parameters.json
 *.egg-info/
 
 # Local editor and operating system files

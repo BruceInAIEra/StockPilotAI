@@ -327,6 +327,12 @@ adapters with appropriately licensed feeds before a public release.
 
 ## Future path
 
+The initial low-cost Lightsail infrastructure and deployment preparation are in
+[`infra/README.md`](infra/README.md), with the longer-term ECS/Fargate and RDS plan
+in [`docs/aws-architecture.md`](docs/aws-architecture.md). Infrastructure synthesis
+and local validation do not deploy AWS resources. The domain, allowed access IP,
+and budget notification settings must be chosen before deployment.
+
 - PostgreSQL and per-user ownership of saved analyses
 - Authentication and authorization
 - SQS-style background jobs for long-running multi-agent analysis

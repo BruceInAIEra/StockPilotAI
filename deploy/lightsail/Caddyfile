@@ -1,0 +1,15 @@
+{
+	# HTTPS is IP-restricted. Use public port 80 to validate certificates.
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$SITE_DOMAIN} {
+	tls {
+		issuer acme {
+			disable_tlsalpn_challenge
+		}
+	}
+	reverse_proxy web:8000
+}

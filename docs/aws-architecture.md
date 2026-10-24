@@ -6,7 +6,10 @@ Updated: October 21, 2026 — phased deployment for limited initial traffic.
 
 Feature branch: `codex/aws-integration`
 
-Status: Agreed direction; infrastructure and product features are not yet implemented.
+Status: Initial Lightsail infrastructure and release files are prepared in
+`infra/` and `deploy/lightsail/`; no AWS deployment has been performed. Production
+infrastructure and hosted product features remain planned. See
+[the preparation and deployment runbook](../infra/README.md).
 
 ## Product scope
 

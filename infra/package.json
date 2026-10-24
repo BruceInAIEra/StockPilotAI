@@ -1,0 +1,6 @@
+{
+  "name": "stockpilot-infra",
+  "private": true,
+  "scripts": {"synth": "cdk synth --strict"},
+  "devDependencies": {"aws-cdk": "2.1146.1"}
+}
