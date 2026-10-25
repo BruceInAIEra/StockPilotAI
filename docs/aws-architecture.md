@@ -66,6 +66,14 @@ The web service and worker can share a Docker image with different entry command
 
 ## Initial environment and production transition
 
+The diagrams show the prepared Lightsail configuration; it has not yet been
+deployed. The production target remains the ECS/Fargate and RDS design above.
+
+![Initial Lightsail architecture](diagrams/lightsail-architecture.png)
+
+- [Stock analysis request sequence](diagrams/stock-analysis-sequence.png)
+- [Application deployment sequence](diagrams/lightsail-deployment-sequence.png)
+
 ### Phase 1: Restricted development/demo on Lightsail
 
 - Use one Linux Lightsail instance in the confirmed selected Region,
