@@ -2,26 +2,29 @@
 
 This prepares the restricted development/demo environment in
 [the architecture plan](../docs/aws-architecture.md). It does not create AWS
-resources during synthesis or tests. Domain, operator IP, budget threshold,
-notification email, and SSH key selection remain undecided.
+resources during synthesis or tests. Oregon is the requested deployment target.
+Operator IP, budget threshold,
+notification email, and SSH key selection remain undecided; a domain is optional.
 
 ## Components
 
 - Python CDK generates CloudFormation for one 2 GB Linux Lightsail instance in
-  **us-east-2**, an attached static IP, daily automatic snapshots, and a monthly
+  **us-west-2**, an attached static IP, daily automatic snapshots, and a monthly
   project-wide cost budget with email alerts at 80% and 100%. Credits and refunds
   are excluded from the budget calculation so gross usage remains visible.
-- A required operator IPv4 `/32` restricts SSH and HTTPS. Port 80 is public for
-  ACME HTTP-01 certificate validation and redirects only. No database, app,
-  Docker API, or IPv6 port is opened by the stack. Do not add an AAAA DNS record.
+- `AccessMode=ssh` is the CloudFormation default: only TCP 22 from the required
+  operator IPv4 `/32` is allowed. No public HTTP, HTTPS, app, DB, or IPv6 ingress
+  is opened. Optional `AccessMode=https` adds restricted 443 and public 80 for
+  certificate validation and redirects. Do not add an AAAA DNS record.
 - Bootstrap installs Docker/Compose and prepares root-owned directories. It
   contains no secrets and does not start the application.
-- Compose runs PostgreSQL, FastAPI/Uvicorn, and Caddy. Only Caddy publishes
-  ports. Separate persistent volumes hold the database, market cache, and Caddy
-  certificate state. A one-off service runs Alembic migrations explicitly.
+- Compose runs PostgreSQL and FastAPI/Uvicorn. In SSH mode, `compose.ssh.yaml`
+  publishes the app only on server `127.0.0.1:8000`; Caddy stays disabled. In HTTPS
+  mode, Caddy publishes 80/443 and the app has no host port. Persistent volumes
+  hold state. A one-off service runs Alembic migrations explicitly.
 - The host release script builds a commit-tagged image, validates configuration,
-  backs up an existing database, stops web ingress for migrations, waits for app
-  readiness, then starts Caddy. It installs a daily logical-backup timer.
+  stops web ingress, backs up the database before migrations, waits for app
+  readiness, then starts Caddy only in HTTPS mode. It installs a daily logical-backup timer.
 
 The instance and static IP have both deletion and replacement retention policies.
 The CDK stack has termination protection. These reduce accidental deletion; they
@@ -40,7 +43,7 @@ cd infra
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock
 pnpm install --frozen-lockfile
-export AWS_REGION=us-east-2 AWS_DEFAULT_REGION=us-east-2
+export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2
 pnpm exec cdk synth --strict --quiet
 .venv/bin/cfn-lint cdk.out/StockPilotLightsail.template.json
 .venv/bin/python -m pytest tests -q
@@ -59,12 +62,13 @@ Shell checks from the repository root:
 
 ```bash
 bash -n deploy/lightsail/{bootstrap,common,release,backup}.sh
-python3 infra/smoke_test.py
+python3 infra/smoke_test.py --mode ssh
+python3 infra/smoke_test.py --mode https
 ```
 
 The smoke check builds the image, runs migrations and readiness checks, validates
-Caddy configuration without issuing a certificate, and restores a logical dump
-into a separate test database. It uses a fake API key, publishes no host ports,
+SSH loopback access or Caddy configuration without issuing a certificate, and restores a logical dump
+into a separate test database. It uses a fake API key; SSH tests publish an ephemeral loopback port,
 and removes its randomly named test containers and volumes afterward. Docker
 must be running; no AWS or paid provider calls are made.
 
@@ -76,17 +80,21 @@ optional checker is available; they are a separate layer from schema validation.
 
 ## Decisions required before any AWS deployment
 
-1. Confirm the intended AWS project and Ohio Region in AWS Settings; recheck plan
+1. Confirm the intended AWS project permits Oregon before creating resources.
+   Changing the console Region selector alone does not change the assigned Region
+   of a simplified-experience project; other Regions require advanced access.
+   Check AWS Settings > Projects > Overview > Additional Info > Region, and recheck plan
    and credit/spend status in AWS Settings > Billing. Confirm Lightsail and the
    selected Ubuntu blueprint/bundle remain available before creating anything.
-2. Choose an existing Lightsail SSH key pair in Ohio and the trusted operator's
+2. Choose an existing Lightsail SSH key pair in Oregon and the trusted operator's
    public IPv4 address (`/32`). Keep the private key on the operator's machine.
 3. Choose a monthly gross-cost threshold and budget notification email. This
    budget covers all AWS usage in the project, not just StockPilotAI. Alerts can
    lag usage and are not a hard spending cap; manage spend limits in AWS Settings.
-4. Choose a DNS hostname. Create an A record pointing to the stack's static IP
-   after provisioning. Caddy requires public DNS and inbound port 80 for HTTP-01;
-   HTTPS stays IP-restricted. DNS is managed separately in this first version.
+4. Keep `AccessMode=ssh` to defer a domain. Use `ACCESS_MODE=ssh` in the runtime
+   file as well. For optional HTTPS later, choose a DNS hostname, set both access
+   modes to `https`, configure `SITE_DOMAIN`, and create an A record to the static
+   IP. Caddy uses public port 80 for HTTP-01; HTTPS remains IP-restricted.
 5. Choose backup recovery/retention requirements. Daily dumps plus automatic
    snapshots are an initial baseline; test a restore before storing valuable data.
 
@@ -111,7 +119,8 @@ physical names casually: a replacement does not transfer PostgreSQL volumes.
    mode `0600`. Never place the actual file in a source archive or Git.
    Generate a password with `python3 -c 'import secrets; print(secrets.token_hex(32))'`.
    Use that 64-character hex string as `POSTGRES_PASSWORD` and set the real
-   `SITE_DOMAIN` and `OPENAI_API_KEY`. Values must be plain, single-line, unquoted
+   `OPENAI_API_KEY`. Keep `ACCESS_MODE=ssh` and omit `SITE_DOMAIN` for tunnel access.
+   HTTPS mode requires `ACCESS_MODE=https` and a real `SITE_DOMAIN`. Values must be plain, single-line, unquoted
    strings without whitespace, shell substitutions, or `$` interpolation.
    Rotate an initialized PostgreSQL password in the DB as well as the file;
    changing `POSTGRES_PASSWORD` alone does not update an existing database.
@@ -132,8 +141,9 @@ physical names casually: a replacement does not transfer PostgreSQL volumes.
    image and writes its reference to root-only `/etc/stockpilot/release.env`.
    The previous image reference is saved to `previous-release.env`. Do not print
    `docker compose config` without `--quiet`: resolved configuration has secrets.
-5. From the allowed IP, verify HTTPS, `/ready`, and one complete stock analysis.
-   Also test that an unapproved network cannot reach HTTPS or SSH. Confirm
+5. From the allowed IP, open the SSH tunnel below (or verify HTTPS in HTTPS mode),
+   check `/ready`, and run one complete stock analysis. Test that unapproved
+   networks cannot reach SSH or optional HTTPS, and that port 8000 is not public. Confirm
    snapshot creation and `systemctl list-timers stockpilot-backup.timer`.
 
 App and database image pulls/builds must be tested for the target server's CPU
@@ -141,6 +151,30 @@ architecture. The local build follows the server architecture; ECR/Fargate later
 requires an explicit matching build platform. Review PostgreSQL/Caddy image
 versions and committed image digests regularly for security updates; upgrades require local validation and
 backups. Constrain the model allowlist and avoid unnecessary paid analyses.
+
+## Test without a domain using SSH
+
+After provisioning and running the release script in SSH mode, run this on your
+Mac (replace the key path and server address):
+
+```bash
+chmod 400 /path/to/your-key.pem
+ssh -i /path/to/your-key.pem -N -o ExitOnForwardFailure=yes \
+  -L 127.0.0.1:18000:127.0.0.1:8000 ubuntu@LIGHTSAIL_STATIC_IP
+```
+
+Keep that terminal open and visit `http://localhost:18000/`; check
+`http://localhost:18000/ready` too. Port 18000 on your Mac forwards over encrypted
+SSH to port 8000 on the server's loopback interface. Nothing should listen on a
+public server interface at port 8000. Stop the tunnel with Ctrl+C. This command
+will not work until the AWS server, SSH key, and app deployment exist.
+
+To enable HTTPS later, update CloudFormation `AccessMode` and runtime
+`ACCESS_MODE` to `https`, add `SITE_DOMAIN`, configure DNS, and release again.
+The SSH overlay is then omitted, and Caddy is started. To return to SSH-only,
+set both modes to `ssh` and release again; the script stops any existing Caddy
+container before starting the web app on loopback. Changing regions creates a
+new regional stack; it does not move or delete any resources in another region.
 
 ## Backups, restore, and failed releases
 

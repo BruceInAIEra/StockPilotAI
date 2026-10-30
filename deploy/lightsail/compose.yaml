@@ -58,10 +58,12 @@ services:
     logging: *logging
 
   caddy:
+    profiles: [https]
     image: caddy:2-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f
     restart: unless-stopped
     environment:
-      SITE_DOMAIN: ${SITE_DOMAIN:?required}
+      # HTTPS releases validate a real domain before starting Caddy.
+      SITE_DOMAIN: ${SITE_DOMAIN:-localhost}
     ports:
       - "80:80"
       - "443:443"

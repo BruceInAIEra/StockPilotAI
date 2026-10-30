@@ -330,8 +330,10 @@ adapters with appropriately licensed feeds before a public release.
 The initial low-cost Lightsail infrastructure and deployment preparation are in
 [`infra/README.md`](infra/README.md), with the longer-term ECS/Fargate and RDS plan
 in [`docs/aws-architecture.md`](docs/aws-architecture.md). Infrastructure synthesis
-and local validation do not deploy AWS resources. The domain, allowed access IP,
-and budget notification settings must be chosen before deployment.
+and local validation do not deploy AWS resources. The target is Oregon
+(`us-west-2`), with domain-free SSH-tunnel access by default. Choose the allowed
+access IP, SSH key, and budget notification settings before deployment; a domain
+is needed only for the optional HTTPS mode.
 
 - PostgreSQL and per-user ownership of saved analyses
 - Authentication and authorization

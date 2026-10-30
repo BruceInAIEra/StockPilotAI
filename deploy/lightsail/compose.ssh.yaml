@@ -1,0 +1,5 @@
+# Combined with compose.yaml only for SSH-tunnel access; never publish to 0.0.0.0.
+services:
+  web:
+    ports:
+      - "127.0.0.1:8000:8000"

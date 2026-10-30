@@ -17,19 +17,24 @@ ROOT = Path(__file__).parents[2]
 @pytest.fixture(scope="module")
 def template():
     app = cdk.App()
-    stack = LightsailStack(app, "SafetyTest", env=cdk.Environment(region="us-east-2"))
+    stack = LightsailStack(app, "SafetyTest", env=cdk.Environment(region="us-west-2"))
     return Template.from_stack(stack).to_json()
 
 
 def test_firewall_does_not_publish_app_database_or_ipv6(template):
     server = next(r for r in template["Resources"].values() if r["Type"] == "AWS::Lightsail::Instance")
-    ports = server["Properties"]["Networking"]["Ports"]
-    assert {p["FromPort"] for p in ports} == {22, 80, 443}
-    for port in ports:
-        assert port["Ipv6Cidrs"] == []
-        assert port["ToPort"] == port["FromPort"]
-        if port["FromPort"] != 80:
-            assert port["Cidrs"] == [{"Ref": "OperatorIpv4Cidr"}]
+    condition, https_ports, ssh_ports = server["Properties"]["Networking"]["Ports"]["Fn::If"]
+    assert condition == "EnableHttps"
+    assert template["Conditions"][condition] == {"Fn::Equals": [{"Ref": "AccessMode"}, "https"]}
+    assert template["Parameters"]["AccessMode"]["Default"] == "ssh"
+    assert {p["FromPort"] for p in ssh_ports} == {22}
+    assert {p["FromPort"] for p in https_ports} == {22, 80, 443}
+    for ports in [ssh_ports, https_ports]:
+        for port in ports:
+            assert port["Ipv6Cidrs"] == []
+            assert port["ToPort"] == port["FromPort"]
+            if port["FromPort"] != 80:
+                assert port["Cidrs"] == [{"Ref": "OperatorIpv4Cidr"}]
     pattern = template["Parameters"]["OperatorIpv4Cidr"]["AllowedPattern"]
     assert re.fullmatch(pattern, "203.0.113.8/32")
     for unsafe in ["0.0.0.0/0", "203.0.113.8/24", "999.0.0.1/32", "::/0"]:
@@ -46,7 +51,7 @@ def test_state_retention_snapshots_and_deploy_region(template):
             assert resource["Properties"]["AddOns"][0]["Status"] == "Enabled"
             assert "OPENAI_API_KEY" not in resource["Properties"]["UserData"]
     assert template["Rules"]["SelectedRegionOnly"]["Assertions"][0]["Assert"] == {
-        "Fn::Equals": [{"Ref": "AWS::Region"}, "us-east-2"]
+        "Fn::Equals": [{"Ref": "AWS::Region"}, "us-west-2"]
     }
 
 
@@ -59,6 +64,9 @@ def test_alerts_count_costs_before_credits(template):
 def test_only_caddy_publishes_ports_and_migration_is_explicit():
     services = yaml.safe_load((ROOT / "deploy/lightsail/compose.yaml").read_text())["services"]
     assert services["caddy"]["ports"] == ["80:80", "443:443"]
+    assert services["caddy"]["profiles"] == ["https"]
+    ssh = yaml.safe_load((ROOT / "deploy/lightsail/compose.ssh.yaml").read_text())
+    assert ssh["services"]["web"]["ports"] == ["127.0.0.1:8000:8000"]
     for name in ["web", "db", "migrate"]:
         assert "ports" not in services[name]
     assert services["migrate"]["command"] == ["alembic", "upgrade", "head"]
@@ -72,7 +80,7 @@ spec.loader.exec_module(validator)
 
 def write_env(tmp_path, extra=""):
     path = tmp_path / "runtime.env"
-    path.write_text("SITE_DOMAIN=demo.example.com\nPOSTGRES_PASSWORD=" + "a" * 64
+    path.write_text("POSTGRES_PASSWORD=" + "a" * 64
                     + "\nOPENAI_API_KEY=sk-test-only\n" + extra)
     path.chmod(0o600)
     return path
@@ -80,8 +88,21 @@ def write_env(tmp_path, extra=""):
 
 def test_valid_runtime_and_reject_unsafe_permissions(tmp_path):
     path = write_env(tmp_path)
-    assert validator.validate(path)["SITE_DOMAIN"] == "demo.example.com"
+    assert "SITE_DOMAIN" not in validator.validate(path)
     path.chmod(0o644)
+    with pytest.raises(ValueError):
+        validator.validate(path)
+
+
+def test_https_requires_domain_and_ssh_needs_none(tmp_path):
+    path = write_env(tmp_path, "ACCESS_MODE=ssh\n")
+    assert validator.validate(path)["ACCESS_MODE"] == "ssh"
+    path = write_env(tmp_path, "ACCESS_MODE=https\n")
+    with pytest.raises(ValueError):
+        validator.validate(path)
+    path = write_env(tmp_path, "ACCESS_MODE=https\nSITE_DOMAIN=demo.example.com\n")
+    assert validator.validate(path)["SITE_DOMAIN"] == "demo.example.com"
+    path = write_env(tmp_path, "ACCESS_MODE=public\n")
     with pytest.raises(ValueError):
         validator.validate(path)
 

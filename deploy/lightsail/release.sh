@@ -15,7 +15,9 @@ if [[ -f $RELEASE_ENV ]]; then
 fi
 printf 'APP_IMAGE=stockpilot:%s\n' "$1" >"$RELEASE_ENV"
 compose config --quiet
-compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+if [[ $STOCKPILOT_ACCESS_MODE == https ]]; then
+  compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+fi
 compose up -d --wait db
 # App downtime is intentional during this small-host release. No new requests
 # while migrating; interrupted analyses must be resubmitted.
@@ -23,10 +25,16 @@ compose stop caddy web
 bash "$DEPLOY_DIR/backup.sh" --already-locked
 compose run --rm migrate
 compose up -d --wait web
-compose up -d caddy
+if [[ $STOCKPILOT_ACCESS_MODE == https ]]; then
+  compose up -d caddy
+fi
 install -m 0644 "$DEPLOY_DIR/stockpilot-backup.service" /etc/systemd/system/
 install -m 0644 "$DEPLOY_DIR/stockpilot-backup.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now stockpilot-backup.timer
-echo 'App readiness passed. Check HTTPS from the allowed IP and run a complete analysis.'
+if [[ $STOCKPILOT_ACCESS_MODE == ssh ]]; then
+  echo 'App readiness passed. Open an SSH tunnel to server 127.0.0.1:8000 and run a complete analysis.'
+else
+  echo 'App readiness passed. Check HTTPS from the allowed IP and run a complete analysis.'
+fi
 echo 'If a step failed after stopping the app, inspect logs and restore/release explicitly.'

@@ -5,9 +5,9 @@ import aws_cdk as cdk
 
 from lightsail.stack import LightsailStack
 
-region = os.environ.get("CDK_DEFAULT_REGION", "us-east-2")
-if region != "us-east-2":
-    raise ValueError("StockPilotAI resources must stay in the selected Region: us-east-2")
+region = os.environ.get("CDK_DEFAULT_REGION", "us-west-2")
+if region != "us-west-2":
+    raise ValueError("StockPilotAI deployment target is Oregon: us-west-2")
 
 app = cdk.App()
 LightsailStack(

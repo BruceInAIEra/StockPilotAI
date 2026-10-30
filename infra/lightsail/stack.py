@@ -2,7 +2,7 @@
 from pathlib import Path
 
 from aws_cdk import (
-    Aws, CfnOutput, CfnParameter, CfnRule, CfnRuleAssertion, Fn, RemovalPolicy, Stack,
+    Aws, CfnCondition, CfnOutput, CfnParameter, CfnRule, CfnRuleAssertion, Fn, RemovalPolicy, Stack,
     aws_budgets as budgets, aws_lightsail as lightsail,
 )
 from constructs import Construct
@@ -12,36 +12,37 @@ class LightsailStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs):
         super().__init__(scope, construct_id, **kwargs)
         self.template_options.description = (
-            "Restricted StockPilotAI development/demo on one Ohio Lightsail server; "
+            "Restricted StockPilotAI development/demo on one Oregon Lightsail server; "
             "Compose runs the app and PostgreSQL. Stateful resources are retained."
         )
         self.template_options.metadata = {
             "AWSToolsMetrics": {"AWSAgentToolkit": "aws-cloudformation@3"},
             "com.aws.cloudformation.Context": {
                 "ref": ["docs/aws-architecture.md", "infra/README.md"],
-                "must": ["Ohio only", "No secrets in parameters or user data"],
+                "must": ["Oregon only; verify project permits this Region before deployment",
+                         "No secrets in parameters or user data"],
             },
         }
         CfnRule(self, "SelectedRegionOnly", assertions=[CfnRuleAssertion(
-            assert_=Fn.condition_equals(Aws.REGION, "us-east-2"),
-            assert_description="Deploy only in the selected Region, us-east-2.",
+            assert_=Fn.condition_equals(Aws.REGION, "us-west-2"),
+            assert_description="Deploy only in the requested Region, us-west-2.",
         )])
         octet = r"(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])"
         operator = CfnParameter(
             self, "OperatorIpv4Cidr", type="String",
             allowed_pattern=rf"{octet}(?:\.{octet}){{3}}/32",
             constraint_description="A single trusted IPv4 address with /32; no public ranges.",
-            description="Required later: trusted operator IP for SSH and HTTPS access.",
+            description="Trusted operator IP for SSH and optional HTTPS access.",
         )
         key = CfnParameter(
             self, "SshKeyPairName", type="String", min_length=1,
             allowed_pattern=r"[A-Za-z0-9_.-]+",
-            description="Existing Lightsail SSH key pair in Ohio; no private key in the stack.",
+            description="Existing Lightsail SSH key pair in Oregon; no private key in the stack.",
         )
         blueprint = CfnParameter(
             self, "UbuntuBlueprintId", type="String", default="ubuntu_24_04",
             allowed_values=["ubuntu_24_04"],
-            description="Verify blueprint availability in Ohio before deployment.",
+            description="Verify blueprint availability in Oregon before deployment.",
         )
         budget_amount = CfnParameter(
             self, "MonthlyBudgetUsd", type="Number", min_value=1,
@@ -53,23 +54,27 @@ class LightsailStack(Stack):
             description="Required later: email to receive budget alerts (not a spending cap).",
         )
 
+        access = CfnParameter(
+            self, "AccessMode", type="String", default="ssh", allowed_values=["ssh", "https"],
+            description="ssh: tunnel only, no domain; https: Caddy with a domain. Match runtime ACCESS_MODE.",
+        )
+        https = CfnCondition(self, "EnableHttps", expression=Fn.condition_equals(access.value_as_string, "https"))
+
         def port(number: int, cidrs: list[str]):
-            return lightsail.CfnInstance.PortProperty(
-                from_port=number, to_port=number, protocol="tcp",
-                access_direction="inbound", cidrs=cidrs, ipv6_cidrs=[],
-            )
+            return {"FromPort": number, "ToPort": number, "Protocol": "tcp",
+                    "AccessDirection": "inbound", "Cidrs": cidrs, "Ipv6Cidrs": []}
+
+        ssh_ports = [port(22, [operator.value_as_string])]
+        https_ports = ssh_ports + [port(80, ["0.0.0.0/0"]), port(443, [operator.value_as_string])]
 
         instance = lightsail.CfnInstance(
             self, "Server",
             instance_name=Fn.sub("${AWS::StackName}-server"),
             blueprint_id=blueprint.value_as_string, bundle_id="small_3_0",
             key_pair_name=key.value_as_string,
-            networking=lightsail.CfnInstance.NetworkingProperty(ports=[
-                port(22, [operator.value_as_string]),
-                # Caddy serves ACME HTTP-01 and redirects here, never the application.
-                port(80, ["0.0.0.0/0"]),
-                port(443, [operator.value_as_string]),
-            ]),
+            networking=lightsail.CfnInstance.NetworkingProperty(
+                ports=Fn.condition_if(https.logical_id, https_ports, ssh_ports),
+            ),
             add_ons=[lightsail.CfnInstance.AddOnProperty(
                 add_on_type="AutoSnapshot", status="Enabled",
                 auto_snapshot_add_on_request=lightsail.CfnInstance.AutoSnapshotAddOnProperty(
@@ -81,7 +86,8 @@ class LightsailStack(Stack):
         instance.apply_removal_policy(RemovalPolicy.RETAIN)
         instance.cfn_options.metadata = {"com.aws.cloudformation.Context": {
             "why": "Low-traffic demo; app and DB share host to avoid ALB/RDS baseline cost",
-            "must": ["SSH/HTTPS restricted to operator /32", "80 for ACME/redirect only",
+            "must": ["Default ssh mode opens only port 22 to operator /32",
+                     "HTTPS mode: restricted 443; public 80 for ACME/redirect only",
                      "No public database port or IPv6 ingress", "Back up before replacement"],
             "mutable": "review-required",
         }}
