@@ -2,14 +2,15 @@
 
 Decision date: October 16, 2026
 
-Updated: October 29, 2026 — Oregon target and domain-free SSH access.
+Updated: November 1, 2026 — imported Lightsail staging and deployed the app over SSH.
 
-Feature branch: `codex/aws-integration`
+Feature branch: `codex/lightsail-deployment`
 
-Status: Initial Lightsail infrastructure and release files are prepared in
-`infra/` and `deploy/lightsail/`; no AWS deployment has been performed. Production
-infrastructure and hosted product features remain planned. See
-[the preparation and deployment runbook](../infra/README.md).
+Status: The existing Oregon Lightsail server is imported into CloudFormation,
+and FastAPI/PostgreSQL are deployed with SSH-tunnel access. Static IP, automatic
+snapshots, and budget alerts remain pending, as do production infrastructure and
+hosted product features. See the [deployment record](lightsail-staging.md) and
+[deployment runbook](../infra/README.md).
 
 ## Product scope
 
@@ -66,9 +67,11 @@ The web service and worker can share a Docker image with different entry command
 
 ## Initial environment and production transition
 
-The current default is an SSH-only Lightsail environment targeting Oregon; it has
-not yet been deployed. Verify that the AWS project permits Oregon before creating
-resources. The production target remains ECS/Fargate and RDS.
+The current environment is an SSH-only Lightsail deployment in Oregon. The
+manually created server was imported into stack `stockpilot-staging`; its saved
+baseline is `infra/import/lightsail-instance.template.json`. The full CDK stack
+still describes additional resources that have not been deployed. Verify project
+permissions before future changes. The production target remains ECS/Fargate and RDS.
 
 ```mermaid
 flowchart LR
@@ -96,10 +99,14 @@ for the optional Caddy mode; the current SSH mode above needs no domain or Caddy
   attachment, and supported network/access configuration in version-controlled
   infrastructure definitions. Parameterize environment-specific settings and
   review stack changes before applying them.
+  Current staging adopted an existing server through resource import; static IP,
+  automatic snapshots, and budget alerts remain a later stack update.
 - Default to `AccessMode=ssh` in CloudFormation and `ACCESS_MODE=ssh` at runtime.
   Run FastAPI and PostgreSQL with Compose; publish web only on server
   `127.0.0.1:8000` and permit only SSH from the operator IP in the AWS firewall.
   Access via a laptop SSH tunnel; no domain or certificate is needed.
+  The import preserved the existing Lightsail browser SSH aliases in addition to
+  the operator `/32`; review them explicitly before changing access rules.
 - Keep Caddy as an optional HTTPS profile for a later domain. Enabling HTTPS
   requires matching access modes, a DNS hostname, and an A record to the static IP.
 - CloudFormation manages AWS infrastructure; a version-controlled bootstrap and
@@ -310,12 +317,13 @@ not automatically undo a database migration.
 8. **Later:** Consider paid subscriptions, mobile clients, GraphQL, Aurora, or
    Bedrock only when concrete requirements justify them.
 
-## Initial deployment decisions still needed
+## Remaining deployment decisions
 
-- Requested deployment target is us-west-2 (Oregon); verify the intended project
-  permits Oregon before deployment. Choose the monthly infrastructure budget;
-  defer the domain while using SSH-only mode. The local AWS profile may still
-  select Ohio, so set the Oregon environment explicitly when synthesizing.
+- Initial staging is live in us-west-2 (Oregon). Choose the monthly infrastructure
+  budget and notification email, then review the pending static IP, automatic
+  snapshots, and budget update against the imported baseline. Keep SSH-only mode
+  while deferring the domain. Specify Oregon explicitly for AWS and CDK operations;
+  the local profile's default Region may differ.
 - Backup retention, acceptable data loss/recovery time, and whether representative
   staging should run continuously or only during release testing.
 - Production availability target and Single-AZ versus Multi-AZ configuration.

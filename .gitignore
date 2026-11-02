@@ -28,6 +28,7 @@ runtime.env
 release.env
 previous-release.env
 deploy.parameters.json
+deploy.resources.json
 *.egg-info/
 
 # Local editor and operating system files

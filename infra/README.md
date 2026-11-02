@@ -1,19 +1,29 @@
 # Lightsail infrastructure and deployment
 
-This prepares the restricted development/demo environment in
-[the architecture plan](../docs/aws-architecture.md). It does not create AWS
-resources during synthesis or tests. Oregon is the requested deployment target.
-Operator IP, budget threshold,
-notification email, and SSH key selection remain undecided; a domain is optional.
+This defines the restricted development/demo environment in
+[the architecture plan](../docs/aws-architecture.md). Staging was deployed in
+Oregon on November 1, 2026 by importing an existing Lightsail instance and running
+the host bootstrap/release scripts over SSH. See the
+[deployment record and import procedure](../docs/lightsail-staging.md) for the
+current baseline, verification results, and remaining work.
+
+The imported stack currently manages only the server. The full CDK definition
+also includes a static IP, automatic snapshots, and a budget; those additions
+have not been deployed. Budget threshold and notification email remain undecided.
+Synthesis and local tests do not create AWS resources.
 
 ## Components
 
-- Python CDK generates CloudFormation for one 2 GB Linux Lightsail instance in
-  **us-west-2**, an attached static IP, daily automatic snapshots, and a monthly
+- Python CDK generates the planned full CloudFormation stack for one 2 GB Linux
+  Lightsail instance in **us-west-2**, an attached static IP, daily automatic
+  snapshots, and a monthly
   project-wide cost budget with email alerts at 80% and 100%. Credits and refunds
   are excluded from the budget calculation so gross usage remains visible.
-- `AccessMode=ssh` is the CloudFormation default: only TCP 22 from the required
-  operator IPv4 `/32` is allowed. No public HTTP, HTTPS, app, DB, or IPv6 ingress
+- `import/lightsail-instance.template.json` records the imported server baseline.
+  It preserves the operator `/32` and the existing Lightsail browser SSH aliases.
+  Its parameters and resource mapping examples contain no live IPs or secrets.
+- In the full CDK template, `AccessMode=ssh` is the default: only TCP 22 from the
+  required operator IPv4 `/32` is allowed. No public HTTP, HTTPS, app, DB, or IPv6 ingress
   is opened. Optional `AccessMode=https` adds restricted 443 and public 80 for
   certificate validation and redirects. Do not add an AAAA DNS record.
 - Bootstrap installs Docker/Compose and prepares root-owned directories. It
@@ -26,8 +36,10 @@ notification email, and SSH key selection remain undecided; a domain is optional
   stops web ingress, backs up the database before migrations, waits for app
   readiness, then starts Caddy only in HTTPS mode. It installs a daily logical-backup timer.
 
-The instance and static IP have both deletion and replacement retention policies.
-The CDK stack has termination protection. These reduce accidental deletion; they
+The imported instance has both deletion and replacement retention policies,
+and the deployed stack has termination protection. The full CDK stack also
+retains its planned static IP and requests termination protection.
+These reduce accidental deletion; they
 do not migrate data during replacement. A retained instance can continue billing,
 and an orphaned IP may incur charges. Never use `docker compose down -v` on this
 environment. Review backups and restore plans before replacement or cleanup.
@@ -46,6 +58,7 @@ pnpm install --frozen-lockfile
 export AWS_REGION=us-west-2 AWS_DEFAULT_REGION=us-west-2
 pnpm exec cdk synth --strict --quiet
 .venv/bin/cfn-lint cdk.out/StockPilotLightsail.template.json
+.venv/bin/cfn-lint --regions us-west-2 --template import/lightsail-instance.template.json
 .venv/bin/python -m pytest tests -q
 ```
 
@@ -78,7 +91,7 @@ Run account-aware CloudFormation pre-deployment checks when actual parameters
 and the intended project are available. Run `cfn-guard` compliance checks if the
 optional checker is available; they are a separate layer from schema validation.
 
-## Decisions required before any AWS deployment
+## Decisions before deploying the full CDK stack
 
 1. Confirm the intended AWS project permits Oregon before creating resources.
    Changing the console Region selector alone does not change the assigned Region
@@ -95,8 +108,9 @@ optional checker is available; they are a separate layer from schema validation.
    file as well. For optional HTTPS later, choose a DNS hostname, set both access
    modes to `https`, configure `SITE_DOMAIN`, and create an A record to the static
    IP. Caddy uses public port 80 for HTTP-01; HTTPS remains IP-restricted.
-5. Choose backup recovery/retention requirements. Daily dumps plus automatic
-   snapshots are an initial baseline; test a restore before storing valuable data.
+5. Choose backup recovery/retention requirements. The planned baseline combines
+   daily dumps and automatic snapshots; current staging has local dumps only.
+   Test a restore before storing valuable data.
 
 Copy `parameters.example.json` to ignored `deploy.parameters.json` and fill in
 the values. The example deliberately fails validation; do not deploy it as-is.
@@ -109,10 +123,19 @@ not hotswap or Express mode. If deploying the generated template directly, enabl
 stack termination protection explicitly. Do not change resource logical IDs or
 physical names casually: a replacement does not transfer PostgreSQL volumes.
 
+For the existing imported staging environment, first compare against the
+versioned import baseline. The CDK app's stack ID is `StockPilotLightsail`, while
+the deployed stack is `stockpilot-staging`; deliberately target the existing
+stack when preparing an update. The full template would add the static IP,
+snapshots, budget, and launch script, and remove the preserved browser SSH
+aliases. Review those differences before applying it. The bootstrap script was
+already run manually over SSH; importing a resource does not run its launch script.
+
 ## Host configuration and first release (after provisioning is approved)
 
 1. Verify the server host key independently before using SSH. Bootstrap must
-   complete: check `/var/lib/stockpilot/bootstrap-complete` and cloud-init logs.
+   complete: check `/var/lib/stockpilot/bootstrap-complete` and cloud-init logs
+   (or the bootstrap command output for a manually created instance).
    Use `ubuntu` with the selected key pair; container operations require sudo.
 2. Transfer `deploy/lightsail/runtime.env.example` securely to the server, edit
    it there, and install it as `/etc/stockpilot/runtime.env`, owned by root with
@@ -144,7 +167,7 @@ physical names casually: a replacement does not transfer PostgreSQL volumes.
 5. From the allowed IP, open the SSH tunnel below (or verify HTTPS in HTTPS mode),
    check `/ready`, and run one complete stock analysis. Test that unapproved
    networks cannot reach SSH or optional HTTPS, and that port 8000 is not public. Confirm
-   snapshot creation and `systemctl list-timers stockpilot-backup.timer`.
+   `systemctl list-timers stockpilot-backup.timer` and snapshot creation if enabled.
 
 App and database image pulls/builds must be tested for the target server's CPU
 architecture. The local build follows the server architecture; ECR/Fargate later
@@ -160,7 +183,7 @@ Mac (replace the key path and server address):
 ```bash
 chmod 400 /path/to/your-key.pem
 ssh -i /path/to/your-key.pem -N -o ExitOnForwardFailure=yes \
-  -L 127.0.0.1:18000:127.0.0.1:8000 ubuntu@LIGHTSAIL_STATIC_IP
+  -L 127.0.0.1:18000:127.0.0.1:8000 ubuntu@SERVER_PUBLIC_IPV4
 ```
 
 Keep that terminal open and visit `http://localhost:18000/`; check
@@ -201,6 +224,6 @@ the source symlink and previous image reference together when appropriate.
 Backups and rollback must account for writes after the backup. Initial releases
 accept downtime and interrupted in-process analyses; durable jobs remain planned.
 
-Only the initial infrastructure and release preparation is implemented here.
-Cognito, durable SQS jobs, email subscriptions, GitHub OIDC CI/CD, and Fargate/RDS
-remain later work. No AWS infrastructure is created by these instructions alone.
+The imported Lightsail staging server and SSH-only application release are live.
+Static IP, automatic snapshots, budget alerts, Cognito, durable SQS jobs, email
+subscriptions, GitHub OIDC CI/CD, and Fargate/RDS remain later work.

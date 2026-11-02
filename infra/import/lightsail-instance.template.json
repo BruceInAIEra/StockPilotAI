@@ -1,0 +1,110 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Adopt the existing StockPilotAI staging server while preserving its current configuration and retained data.",
+  "Metadata": {
+    "AWSToolsMetrics": {
+      "AWSAgentToolkit": "aws-cloudformation@3"
+    },
+    "com.aws.cloudformation.Context": {
+      "ref": [
+        "docs/aws-architecture.md",
+        "infra/README.md",
+        "docs/lightsail-staging.md"
+      ],
+      "must": [
+        "Oregon only; verify project permits this Region before deployment",
+        "No secrets in parameters or user data"
+      ]
+    }
+  },
+  "Rules": {
+    "SelectedRegionOnly": {
+      "Assertions": [
+        {
+          "Assert": {
+            "Fn::Equals": [
+              {
+                "Ref": "AWS::Region"
+              },
+              "us-west-2"
+            ]
+          },
+          "AssertDescription": "Deploy only in the requested Region, us-west-2."
+        }
+      ]
+    }
+  },
+  "Parameters": {
+    "OperatorIpv4Cidr": {
+      "Type": "String",
+      "AllowedPattern": "(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}/32",
+      "ConstraintDescription": "A single trusted IPv4 address with /32; no public ranges.",
+      "Description": "Trusted operator IP for SSH and optional HTTPS access."
+    },
+    "SshKeyPairName": {
+      "Type": "String",
+      "AllowedPattern": "[A-Za-z0-9_.-]+",
+      "Description": "Existing Lightsail SSH key pair in Oregon; no private key in the stack.",
+      "MinLength": 1
+    },
+    "UbuntuBlueprintId": {
+      "Type": "String",
+      "Default": "ubuntu_24_04",
+      "AllowedValues": [
+        "ubuntu_24_04"
+      ],
+      "Description": "Verify blueprint availability in Oregon before deployment."
+    }
+  },
+  "Resources": {
+    "Server": {
+      "Type": "AWS::Lightsail::Instance",
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
+      "Metadata": {
+        "com.aws.cloudformation.Context": {
+          "why": "Adopt the existing manually created demo server without replacing it",
+          "must": [
+            "Import existing server only; add other resources in a later update",
+            "Preserve the current SSH source and browser SSH aliases during import",
+            "No secrets or bootstrap commands in this import template",
+            "Retain the server if the stack is deleted"
+          ],
+          "mutable": "review-required"
+        }
+      },
+      "Properties": {
+        "InstanceName": {
+          "Fn::Sub": "${AWS::StackName}-server"
+        },
+        "BlueprintId": {
+          "Ref": "UbuntuBlueprintId"
+        },
+        "BundleId": "small_3_0",
+        "KeyPairName": {
+          "Ref": "SshKeyPairName"
+        },
+        "Networking": {
+          "Ports": [
+            {
+              "FromPort": 22,
+              "ToPort": 22,
+              "Protocol": "tcp",
+              "AccessDirection": "inbound",
+              "Cidrs": [
+                {
+                  "Ref": "OperatorIpv4Cidr"
+                }
+              ],
+              "Ipv6Cidrs": [],
+              "CidrListAliases": [
+                "lightsail-connect",
+                "lightsail-connect-ipv6"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "OperatorIpv4Cidr",
+    "ParameterValue": "CHOOSE_TRUSTED_IPV4_LATER/32"
+  },
+  {
+    "ParameterKey": "SshKeyPairName",
+    "ParameterValue": "CHOOSE_EXISTING_LIGHTSAIL_KEY_LATER"
+  },
+  {
+    "ParameterKey": "UbuntuBlueprintId",
+    "ParameterValue": "ubuntu_24_04"
+  }
+]

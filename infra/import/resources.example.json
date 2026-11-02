@@ -1,0 +1,9 @@
+[
+  {
+    "ResourceType": "AWS::Lightsail::Instance",
+    "LogicalResourceId": "Server",
+    "ResourceIdentifier": {
+      "InstanceName": "stockpilot-staging-server"
+    }
+  }
+]
