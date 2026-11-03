@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}My history · StockPilotAI{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="eyebrow">Your private research</div>
+  <h1>My analysis history</h1>
+  <p>Review your previous stock analyses and revisit their evidence.</p>
+</section>
+<section class="panel">
+  {% if history %}
+  <div class="history-list">
+    {% for item in history %}
+    <a href="/analyses/{{ item.id }}" class="history-row">
+      <span class="ticker-chip">{{ item.symbol }}</span>
+      <span class="history-company">{{ item.company_name }}</span>
+      <span class="action action-{{ item.action.value|lower if item.action else 'pending' }}">{{ item.action.value if item.action else item.status.value }}</span>
+      <time>{{ item.created_at.strftime('%b %d, %Y · %I:%M %p') }}</time>
+      <span aria-hidden="true">→</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <h2>{{ 'No analyses yet' if page == 1 else 'No more analyses' }}</h2>
+  <p>Your saved reports will appear here. <a href="/">Start a stock analysis</a>.</p>
+  {% endif %}
+  <nav class="account-actions" aria-label="History pages">
+    {% if page > 1 %}<a href="/history?page={{ page - 1 }}">Newer reports</a>{% endif %}
+    <span>Page {{ page }}</span>
+    {% if has_next %}<a href="/history?page={{ page + 1 }}">Older reports</a>{% endif %}
+  </nav>
+</section>
+{% endblock %}

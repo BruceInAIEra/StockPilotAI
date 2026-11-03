@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Welcome · StockPilotAI{% endblock %}
+{% block content %}
+<section class="hero account-hero">
+  <div class="eyebrow">Your research, in one place</div>
+  <h1>A clearer view of your next investment.</h1>
+  <p>Analyze stocks with company fundamentals, valuation, and news. Keep your reports in your own private research history.</p>
+</section>
+<section class="panel account-panel" aria-labelledby="welcome-title">
+  <span class="step">Your StockPilotAI account</span>
+  <h2 id="welcome-title">Welcome to StockPilotAI</h2>
+  <p>Sign in or create an account to start researching. Your analysis history is visible only to you.</p>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  {% if configured %}
+  <div class="account-actions">
+    <a class="button-link" href="/login?start=true">Sign in</a>
+    <a class="button-link secondary" href="/signup">Create account</a>
+  </div>
+  <p class="field-help"><a href="/forgot-password">Forgot your password?</a></p>
+  <p class="field-help">Registration and sign-in are secured by Amazon Cognito. Verify your email before accessing your account.</p>
+  {% else %}
+  <div class="alert" role="status">Account access is being configured. Please try again later.</div>
+  {% endif %}
+</section>
+{% endblock %}

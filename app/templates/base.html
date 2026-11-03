@@ -18,7 +18,17 @@
           <small>Evidence before action</small>
         </span>
       </a>
-      <span class="local-badge">Local MVP</span>
+      {% if request.state.user %}
+      <nav class="account-nav" aria-label="Account">
+        <a href="/">My research</a>
+        <a href="/history">My history</a>
+        <a href="/account">My account</a>
+        <form action="/logout" method="post">
+          <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
+          <button type="submit">Sign out</button>
+        </form>
+      </nav>
+      {% endif %}
     </header>
 
     <main>{% block content %}{% endblock %}</main>

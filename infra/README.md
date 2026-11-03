@@ -225,5 +225,10 @@ Backups and rollback must account for writes after the backup. Initial releases
 accept downtime and interrupted in-process analyses; durable jobs remain planned.
 
 The imported Lightsail staging server and SSH-only application release are live.
-Static IP, automatic snapshots, budget alerts, Cognito, durable SQS jobs, email
+Static IP, automatic snapshots, budget alerts, live Cognito provisioning, durable SQS jobs, email
 subscriptions, GitHub OIDC CI/CD, and Fargate/RDS remain later work.
+
+The account-system application code and a separate Cognito template are now
+available in `auth/cognito.yaml`; see [account setup](../docs/accounts.md).
+Populate the new runtime settings before the next application release. This
+template has not been applied to the running staging environment.

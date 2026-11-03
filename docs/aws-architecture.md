@@ -182,9 +182,11 @@ not an automatic hosting upgrade.
 
 ## Identity and user data
 
-- Start with email one-time-code login. SMS codes can be added as an optional
-  sign-in method; both can access the same account once the contacts are linked
-  and verified.
+- The approved first implementation uses email/password signup and sign-in with
+  verified email through Cognito managed login. Application sessions, profiles,
+  password changes, private report ownership, and paginated history are implemented;
+  live provisioning and deployment remain pending. See [account setup](accounts.md).
+- Passwordless email/SMS is a possible later extension, not the current login flow.
 - Cognito passwordless email/SMS authentication requires Essentials or Plus and
   the app client's `ALLOW_USER_AUTH` flow.
 - A fully passwordless signup experience requires our own signup form using

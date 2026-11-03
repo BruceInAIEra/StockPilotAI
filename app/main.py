@@ -3,11 +3,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from app.api.dependencies import AppContainer
-from app.api.routes import api, health, pages
+from app.api.routes import api, auth, health, pages
+from app.api.auth import AccountAccessMiddleware, validate_csrf
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.providers.llm.base import AnalysisEngine
@@ -19,6 +22,7 @@ from app.providers.market_data.news import NewsProvider, YahooNewsProvider
 from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.database import Base, create_session_factory
 from app.services.analysis_service import AnalysisService
+from app.services.auth_service import AuthService
 
 
 def create_app(
@@ -27,6 +31,7 @@ def create_app(
     analysis_engine: AnalysisEngine | None = None,
     fundamentals_provider: FundamentalsProvider | None = None,
     news_provider: NewsProvider | None = None,
+    auth_provider=None,
 ) -> FastAPI:
     configure_logging()
     settings = settings or get_settings()
@@ -76,16 +81,27 @@ def create_app(
         title=settings.app_name,
         version="0.1.0",
         lifespan=lifespan,
+        dependencies=[Depends(validate_csrf)],
     )
     application.state.container = AppContainer(
         settings=settings,
         analysis_service=analysis_service,
+        auth_service=AuthService(session_factory, settings, auth_provider),
     )
     application.state.session_factory = session_factory
+    @application.exception_handler(RequestValidationError)
+    async def safe_validation_error(request, exc):
+        # Never echo passwords, tokens, or other submitted values in error bodies.
+        return JSONResponse(status_code=422, content={"detail": [
+            {key: error[key] for key in ("loc", "msg", "type")}
+            for error in exc.errors()
+        ]})
     application.mount("/static", StaticFiles(directory="app/static"), name="static")
     application.include_router(health.router)
+    application.include_router(auth.router)
     application.include_router(api.router)
     application.include_router(pages.router)
+    application.add_middleware(AccountAccessMiddleware, auth_service=application.state.container.auth_service)
     return application
 
 

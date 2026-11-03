@@ -2,6 +2,12 @@
 x-app-environment: &app-environment
   APP_ENV: development
   DATABASE_URL: postgresql+psycopg://stockpilot:local-dev-only@db:5432/stockpilot
+  APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8001}
+  COGNITO_REGION: us-west-2
+  COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:-}
+  COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-}
+  COGNITO_DOMAIN: ${COGNITO_DOMAIN:-}
+  SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:-}
 
 services:
   db:

@@ -35,6 +35,11 @@ if (pendingAnalysis) {
         `/api/v1/analyses/${encodeURIComponent(pendingAnalysis.dataset.analysisId)}`,
         { cache: "no-store", signal: activeRequest.signal },
       );
+      if (response.status === 401) {
+        stopped = true;
+        window.location.href = "/login";
+        return;
+      }
       if (response.status === 404) {
         stopped = true;
         pendingAnalysis.setAttribute("aria-busy", "false");

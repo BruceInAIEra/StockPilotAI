@@ -1,0 +1,135 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: StockPilotAI email/password accounts in Oregon, with verified email and Cognito managed login. Application sessions and report ownership live in PostgreSQL.
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+  com.aws.cloudformation.Context:
+    must:
+      - Deploy only in the selected Region us-west-2.
+      - Retain the user pool; replacement does not migrate identities.
+    ref:
+      - ../../docs/accounts.md
+Parameters:
+  AppBaseUrl:
+    Type: String
+    Description: Exact application origin, no trailing slash; HTTPS except localhost for SSH testing.
+    AllowedPattern: '(https://[a-z0-9][a-z0-9.-]*|http://localhost:[0-9]{1,5})'
+  DomainPrefix:
+    Type: String
+    Description: Globally unique Cognito domain prefix for this environment.
+    MinLength: 3
+    MaxLength: 63
+    AllowedPattern: '[a-z0-9](?:[a-z0-9-]*[a-z0-9])?'
+Rules:
+  SelectedRegionOnly:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', us-west-2]
+        AssertDescription: Use the selected Region us-west-2.
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Delegate credentials, verification, and recovery to Cognito instead of storing passwords in the app.
+        must:
+          - Require verified email and preserve identities across releases.
+          - Essentials supports managed login v2; confirm plan and pricing before deployment.
+    Properties:
+      UserPoolName: !Sub '${AWS::StackName}-users'
+      UserPoolTier: ESSENTIALS
+      DeletionProtection: ACTIVE
+      UsernameAttributes: [email]
+      UsernameConfiguration:
+        CaseSensitive: false
+      AutoVerifiedAttributes: [email]
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      MfaConfiguration: OPTIONAL
+      EnabledMfas: [SOFTWARE_TOKEN_MFA]
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 1
+  Client:
+    Type: AWS::Cognito::UserPoolClient
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Authorization code flow with PKCE; the backend exchanges codes and keeps tokens server-side.
+        must:
+          - Keep exact callback and sign-out URLs; never enable implicit grant.
+          - Preserve all client settings during updates.
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: !Sub '${AWS::StackName}-web'
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, aws.cognito.signin.user.admin]
+      CallbackURLs: [!Sub '${AppBaseUrl}/auth/callback']
+      LogoutURLs: [!Sub '${AppBaseUrl}/login']
+      SupportedIdentityProviders: [COGNITO]
+      ReadAttributes: [email, email_verified]
+      WriteAttributes: [email]
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      RefreshTokenRotation:
+        Feature: ENABLED
+        RetryGracePeriodSeconds: 0
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 1
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+  Domain:
+    Type: AWS::Cognito::UserPoolDomain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: AWS-managed domain avoids a separate custom-domain certificate and DNS configuration.
+        must:
+          - Keep domain and user pool in Oregon; managed login v2 needs client branding.
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !Ref DomainPrefix
+      ManagedLoginVersion: 2
+  Branding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: Domain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Cognito managed login pages are unavailable without a branding style for the client.
+        must:
+          - Keep a branding style assigned to the web app client.
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref Client
+      UseCognitoProvidedValues: true
+Outputs:
+  UserPoolId:
+    Description: Set COGNITO_USER_POOL_ID in the runtime environment.
+    Value: !Ref UserPool
+  ClientId:
+    Description: Set COGNITO_CLIENT_ID in the runtime environment.
+    Value: !Ref Client
+  DomainUrl:
+    Description: Set COGNITO_DOMAIN in the runtime environment.
+    Value: !Sub 'https://${Domain}.auth.${AWS::Region}.amazoncognito.com'

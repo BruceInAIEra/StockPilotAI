@@ -6,6 +6,12 @@ x-app-environment: &app-environment
   OPENAI_API_KEY: ${OPENAI_API_KEY:?required}
   OPENAI_DEFAULT_MODEL: ${OPENAI_DEFAULT_MODEL:-gpt-5-mini}
   OPENAI_ALLOWED_MODELS: ${OPENAI_ALLOWED_MODELS:-gpt-5-mini}
+  APP_BASE_URL: ${APP_BASE_URL:?required}
+  COGNITO_REGION: us-west-2
+  COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:?required}
+  COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:?required}
+  COGNITO_DOMAIN: ${COGNITO_DOMAIN:?required}
+  SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?required}
 
 x-logging: &logging
   driver: local

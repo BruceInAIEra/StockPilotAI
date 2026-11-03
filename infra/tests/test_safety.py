@@ -81,7 +81,12 @@ spec.loader.exec_module(validator)
 def write_env(tmp_path, extra=""):
     path = tmp_path / "runtime.env"
     path.write_text("POSTGRES_PASSWORD=" + "a" * 64
-                    + "\nOPENAI_API_KEY=sk-test-only\n" + extra)
+                    + "\nOPENAI_API_KEY=sk-test-only\n"
+                    + ("APP_BASE_URL=https://demo.example.com\n" if "ACCESS_MODE=https" in extra
+                       else "APP_BASE_URL=http://localhost:18000\n")
+                    + "COGNITO_USER_POOL_ID=us-west-2_test\nCOGNITO_CLIENT_ID=client123\n"
+                    + "COGNITO_DOMAIN=https://test.auth.us-west-2.amazoncognito.com\n"
+                    + "SESSION_ENCRYPTION_KEY=b29vb29vb29vb29vb29vb29vb29vb29vb29vb29vb28=\n" + extra)
     path.chmod(0o600)
     return path
 

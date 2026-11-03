@@ -20,11 +20,12 @@ class AnalysisRepository:
     def __init__(self, session_factory: sessionmaker) -> None:
         self._session_factory = session_factory
 
-    def create_running(self, analysis_id: str, request: AnalysisRequest) -> None:
+    def create_running(self, analysis_id: str, request: AnalysisRequest, user_id: str) -> None:
         with self._session_factory() as session:
             session.add(
                 AnalysisRecord(
                     id=analysis_id,
+                    user_id=user_id,
                     symbol=request.symbol,
                     company_name=request.symbol,
                     horizon=request.horizon.value,
@@ -63,18 +64,29 @@ class AnalysisRepository:
             record.error_message = message
             session.commit()
 
-    def get(self, analysis_id: str) -> AnalysisView:
+    def get(self, analysis_id: str, user_id: str) -> AnalysisView:
+        with self._session_factory() as session:
+            record = session.scalar(select(AnalysisRecord).where(
+                AnalysisRecord.id == analysis_id, AnalysisRecord.user_id == user_id))
+            if record is None:
+                raise AnalysisNotFoundError(f"Analysis {analysis_id} was not found.")
+            return self._to_view(record)
+
+    def get_for_worker(self, analysis_id: str) -> AnalysisView:
+        """Internal job result access; never use for an HTTP response lookup."""
         with self._session_factory() as session:
             record = session.get(AnalysisRecord, analysis_id)
             if record is None:
                 raise AnalysisNotFoundError(f"Analysis {analysis_id} was not found.")
             return self._to_view(record)
 
-    def list_recent(self, limit: int = 20) -> list[AnalysisView]:
+    def list_recent(self, user_id: str, limit: int = 20, offset: int = 0) -> list[AnalysisView]:
         with self._session_factory() as session:
             records = session.scalars(
                 select(AnalysisRecord)
-                .order_by(AnalysisRecord.created_at.desc())
+                .where(AnalysisRecord.user_id == user_id)
+                .order_by(AnalysisRecord.created_at.desc(), AnalysisRecord.id.desc())
+                .offset(max(offset, 0))
                 .limit(min(max(limit, 1), 100))
             ).all()
             return [self._to_view(record) for record in records]

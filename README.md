@@ -11,9 +11,15 @@ background jobs can be replaced or extended for a future cloud product.
 > StockPilotAI provides educational research, not personalized financial advice.
 > Market data and AI output can be incomplete or wrong. Verify information independently.
 
+Account access is now required for all stock research. Configure Cognito and run
+the database migration before use; see [account setup](docs/accounts.md). Without
+authentication settings, private features remain locked and `/ready` returns 503.
+The repository includes the implementation and an Oregon Cognito template;
+these changes have not been deployed to the running Lightsail environment.
+
 ## MVP features
 
-- Local FastAPI web interface at `http://127.0.0.1:8000`
+- Local FastAPI web interface at `http://localhost:8000`
 - Stock symbol, investment horizon, ownership status, and model selection
 - One year of price history through a replaceable Yahoo chart adapter
 - SMA 20/50/200, one/three/twelve-month returns, RSI 14, and volatility
@@ -28,12 +34,13 @@ background jobs can be replaced or extended for a future cloud product.
 - Structured OpenAI Responses API output validated by Pydantic
 - Ownership-aware `BUY`, `HOLD`, `SELL`, and `WATCH` guardrails
 - Observable future-entry and thesis-invalidation conditions
-- Local SQLite analysis history
+- Verified email/password accounts, profile settings, password changes, and logout
+- Private, paginated analysis history in SQLite or PostgreSQL
 - Immediate results page with background analysis and automatic completion updates
 - JSON API, health endpoint, migrations, tests, and Docker support
 
-Not included yet: email, scheduled reports, user
-accounts, portfolios, multi-agent analysis, cloud infrastructure, or trading.
+Not included yet: email report delivery, scheduled reports, portfolios,
+multi-agent analysis, or trading. AWS deployment infrastructure is in `infra/`.
 
 Actions account for the ownership choice: `BUY` means buy or add shares; `HOLD`
 means maintain an existing position; `SELL` means exit an existing position; and
@@ -77,7 +84,7 @@ Start the app:
 uvicorn app.main:app --reload
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Open [http://localhost:8000](http://localhost:8000), matching `APP_BASE_URL`.
 
 The database is created at `data/stockpilot.db`. It persists after the local server
 stops and is ignored by Git.
@@ -177,6 +184,10 @@ synchronous for existing API clients.
 
 ## API
 
+All research and account endpoints require a signed-in session. Authenticated
+writes also require `X-CSRF-Token` (or the HTML form's hidden CSRF field).
+See [account setup](docs/accounts.md) for configuration and session behavior.
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/` | Local analysis UI |
@@ -184,10 +195,12 @@ synchronous for existing API clients.
 | `GET` | `/analyses/{id}` | Open analysis progress or a saved result |
 | `GET` | `/api/v1/models` | Read configured model choices |
 | `POST` | `/api/v1/analyses` | Create a JSON analysis |
-| `GET` | `/api/v1/analyses` | List local history |
+| `GET` | `/api/v1/analyses` | List your private history (`limit`, `offset`) |
 | `GET` | `/api/v1/analyses/{id}` | Retrieve one analysis |
 | `GET` | `/health` | Health check |
-| `GET` | `/ready` | Database and required-table readiness; returns 503 until available |
+| `GET` | `/history` | Browse your saved reports by page |
+| `GET` | `/account` | Profile and password settings |
+| `GET` | `/ready` | Database, account tables, and auth configuration readiness |
 
 Example JSON request:
 
@@ -336,7 +349,7 @@ access IP, SSH key, and budget notification settings before deployment; a domain
 is needed only for the optional HTTPS mode.
 
 - PostgreSQL and per-user ownership of saved analyses
-- Authentication and authorization
+- Live Cognito provisioning and account-system deployment (implementation is in place)
 - SQS-style background jobs for long-running multi-agent analysis
 - Independent technical, fundamental, risk, and contrarian agents plus a judge
 - Scheduled watchlists and email reports

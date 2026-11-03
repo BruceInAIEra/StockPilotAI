@@ -1,10 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
 import pytest
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from app.core.config import Settings
 from app.core.errors import AnalysisProviderError, InvalidSymbolError, MarketDataError
@@ -20,6 +21,9 @@ from app.domain.market_data import StockSnapshot
 from app.domain.news import NewsAssessment, NewsEvent
 from app.providers.market_data.fundamentals import YahooFundamentalsProvider
 from app.main import create_app
+from app.api.auth import SESSION_COOKIE
+from app.services.auth_service import Identity, AuthenticationError
+from sqlalchemy import inspect
 from tests.unit.test_fundamentals import FakeTicker
 from tests.unit.test_news import FakeNewsProvider
 
@@ -91,22 +95,68 @@ class FakeAnalysisEngine:
         )
 
 
+class FakeAuthProvider:
+    password_changes = 0
+
+    def exchange(self, code, verifier, nonce):
+        if code != "valid-code":
+            raise AuthenticationError("Sign-in could not be verified. Please try again.")
+        return Identity("https://cognito-idp.us-west-2.amazonaws.com/us-west-2_test",
+                        "test-subject", "investor@example.com", datetime.now(UTC) + timedelta(hours=1),
+                        "test-access", "test-refresh")
+
+    def revoke(self, token):
+        pass
+
+    def change_password(self, access, previous, proposed):
+        if previous != "CorrectPassword1!":
+            raise AuthenticationError("Password could not be changed.")
+        self.password_changes += 1
+
+
+class AccountTestClient(TestClient):
+    def __init__(self, *args, authenticate=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.auto_authenticate = authenticate
+
+    def sign_in(self, subject="test-subject", email="investor@example.com"):
+        auth = self.app.state.container.auth_service
+        cookie, principal = auth.establish_session(Identity(
+            auth.settings.cognito_issuer, subject, email, datetime.now(UTC) + timedelta(hours=1),
+            "test-access", "test-refresh"))
+        self.cookies.set(SESSION_COOKIE, cookie)
+        self.headers["x-csrf-token"] = principal.csrf_token
+        return principal
+
+    def __enter__(self):
+        super().__enter__()
+        if self.auto_authenticate and inspect(self.app.state.session_factory.kw["bind"]).has_table("users"):
+            self.sign_in()
+        return self
+
+
 def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news_provider=None,
-                market_provider=None, settings=None) -> TestClient:
+                market_provider=None, settings=None, authenticate=True, auth_provider=None) -> TestClient:
     settings = settings or Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         openai_api_key="test-key",
         openai_default_model="test-model",
         openai_allowed_models="test-model",
     )
+    settings = settings.model_copy(update={
+        "cognito_user_pool_id": "us-west-2_test", "cognito_client_id": "test-client",
+        "cognito_domain": "https://test.auth.us-west-2.amazoncognito.com",
+        "session_encryption_key": SecretStr("b29vb29vb29vb29vb29vb29vb29vb29vb29vb29vb28="),
+    })
     app = create_app(
         settings=settings,
         market_provider=market_provider or FakeMarketProvider(),
         analysis_engine=analysis_engine or FakeAnalysisEngine(),
         fundamentals_provider=fundamentals_provider or YahooFundamentalsProvider(ticker_factory=lambda symbol: FakeTicker()),
         news_provider=news_provider or FakeNewsProvider(),
+        auth_provider=auth_provider or FakeAuthProvider(),
     )
-    return TestClient(app)
+    return AccountTestClient(app, authenticate=authenticate)
 
 
 def test_health_and_home(tmp_path) -> None:

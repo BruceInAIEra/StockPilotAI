@@ -17,7 +17,7 @@
           <span class="step">New analysis</span>
           <h2>What should we review?</h2>
         </div>
-        <span class="privacy-note">Saved only on this computer</span>
+        <span class="privacy-note">Private to your account</span>
       </div>
 
       {% if error %}
@@ -28,6 +28,7 @@
       {% endif %}
 
       <form action="/analyze" method="post" id="analysis-form">
+        <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
         <label for="symbol">Stock symbol</label>
         <div class="ticker-input">
           <span>$</span>
@@ -118,7 +119,7 @@
         </li>
         <li>
           <span>04</span>
-          <div><strong>Validate</strong><p>Apply ownership rules and save the result locally.</p></div>
+          <div><strong>Validate</strong><p>Apply recommendation rules and save the result to your private history.</p></div>
         </li>
       </ol>
       <div class="method-note">
@@ -132,10 +133,11 @@
     <section class="history-section">
       <div class="section-heading">
         <div>
-          <span class="step">Local history</span>
+          <span class="step">Your private history</span>
           <h2>Recent analyses</h2>
         </div>
         <span>{{ history|length }} saved</span>
+        <a href="/history">View all history</a>
       </div>
       <div class="history-list">
         {% for item in history %}

@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
@@ -30,7 +30,7 @@ def _page_context(request: Request, container: AppContainer) -> dict[str, object
         "request": request,
         "models": container.settings.allowed_models,
         "default_model": container.settings.openai_default_model,
-        "history": container.analysis_service.list_recent(12),
+        "history": container.analysis_service.list_recent(request.state.user.id, 12),
     }
 
 
@@ -74,7 +74,7 @@ def analyze(
             model=model,
             peer_symbols=[value.strip() for value in peer_symbols.split(",") if value.strip()],
         )
-        result, snapshot = container.analysis_service.prepare(analysis_request)
+        result, snapshot = container.analysis_service.prepare(analysis_request, request.state.user.id)
     except (ValidationError, ValueError, InvalidSymbolError) as exc:
         context["error"] = _validation_message(exc)
         return templates.TemplateResponse(
@@ -105,7 +105,7 @@ def analysis_detail(
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> HTMLResponse:
     try:
-        analysis = container.analysis_service.get(analysis_id)
+        analysis = container.analysis_service.get(analysis_id, request.state.user.id)
     except AnalysisNotFoundError as exc:
         return templates.TemplateResponse(
             request=request,
@@ -118,6 +118,18 @@ def analysis_detail(
         name="analysis_detail.html",
         context={"request": request, "analysis": analysis},
     )
+
+
+@router.get("/history", response_class=HTMLResponse)
+def history(
+    request: Request,
+    container: Annotated[AppContainer, Depends(get_container)],
+    page: Annotated[int, Query(ge=1)] = 1,
+):
+    rows = container.analysis_service.list_recent(request.state.user.id, 21, (page - 1) * 20)
+    return templates.TemplateResponse(request=request, name="history.html", context={
+        "history": rows[:20], "page": page, "has_next": len(rows) > 20,
+    })
 
 
 def _validation_message(exc: ValidationError | ValueError | InvalidSymbolError) -> str:

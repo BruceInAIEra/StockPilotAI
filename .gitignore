@@ -23,6 +23,7 @@ dist/
 build/
 cdk.out/
 node_modules/
+infra/.tools/
 *.dump
 runtime.env
 release.env

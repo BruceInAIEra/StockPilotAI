@@ -28,7 +28,7 @@ async function runPolling(fetch) {
     window, fetch, AbortController,
   });
   await new Promise(setImmediate);
-  return { status, panel, timers, listeners, reloads: () => reloads };
+  return { status, panel, timers, listeners, location: window.location, reloads: () => reloads };
 }
 
 test("running analysis polls again without reloading", async () => {
@@ -62,6 +62,13 @@ test("missing analysis stops polling", async () => {
   assert.match(state.status.textContent, /could not be found/);
   assert.equal(state.panel["aria-busy"], "false");
   assert.equal(state.timers.size, 0);
+});
+
+test("expired session redirects to sign-in and stops polling", async () => {
+  const state = await runPolling(async () => ({ status: 401, ok: false }));
+  assert.equal(state.location.href, "/login");
+  assert.equal(state.timers.size, 0);
+  assert.equal(state.reloads(), 0);
 });
 
 test("restoring a cached page resumes polling", async () => {

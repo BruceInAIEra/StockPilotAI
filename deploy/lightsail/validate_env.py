@@ -5,6 +5,8 @@ from pathlib import Path
 import re
 import stat
 import sys
+import base64
+from urllib.parse import urlsplit
 
 
 def validate(path: Path) -> dict[str, str]:
@@ -43,8 +45,29 @@ def validate(path: Path) -> dict[str, str]:
     for key in ["OPENAI_DEFAULT_MODEL", "OPENAI_ALLOWED_MODELS"]:
         if key in values and not re.fullmatch(r"[A-Za-z0-9.,_-]+", values[key]):
             raise ValueError("Invalid model configuration")
+    base = urlsplit(values.get("APP_BASE_URL", ""))
+    if (base.username or base.password or base.path or base.query or base.fragment
+            or not base.hostname):
+        raise ValueError("APP_BASE_URL must be an origin without a path or trailing slash")
+    if access_mode == "https":
+        if values["APP_BASE_URL"] != f"https://{values['SITE_DOMAIN']}":
+            raise ValueError("APP_BASE_URL must match the HTTPS site domain")
+    elif base.scheme != "http" or base.hostname != "localhost" or not base.port:
+        raise ValueError("SSH mode requires an explicit http://localhost:PORT application origin")
+    if not re.fullmatch(r"us-west-2_[A-Za-z0-9]+", values.get("COGNITO_USER_POOL_ID", "")):
+        raise ValueError("Cognito must be in us-west-2")
+    if not re.fullmatch(r"[a-z0-9]{1,128}", values.get("COGNITO_CLIENT_ID", "")):
+        raise ValueError("Set the Cognito app client ID")
+    if not re.fullmatch(r"https://[a-z0-9-]+\.auth\.us-west-2\.amazoncognito\.com",
+                        values.get("COGNITO_DOMAIN", "")):
+        raise ValueError("Set the Cognito managed domain URL in us-west-2")
+    key = values.get("SESSION_ENCRYPTION_KEY", "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{43}=", key) or len(base64.urlsafe_b64decode(key)) != 32:
+        raise ValueError("Set a generated Fernet session encryption key")
     if set(values) - {"ACCESS_MODE", "SITE_DOMAIN", "POSTGRES_PASSWORD", "OPENAI_API_KEY",
-                      "OPENAI_DEFAULT_MODEL", "OPENAI_ALLOWED_MODELS"}:
+                      "OPENAI_DEFAULT_MODEL", "OPENAI_ALLOWED_MODELS", "APP_BASE_URL",
+                      "COGNITO_USER_POOL_ID", "COGNITO_CLIENT_ID", "COGNITO_DOMAIN",
+                      "SESSION_ENCRYPTION_KEY"}:
         raise ValueError("Unexpected runtime configuration key")
     return values
 

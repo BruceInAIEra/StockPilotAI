@@ -34,22 +34,22 @@ class AnalysisService:
         self._fundamentals_provider = fundamentals_provider
         self._news_provider = news_provider
 
-    def run(self, request: AnalysisRequest) -> AnalysisView:
-        analysis = self.create(request)
+    def run(self, request: AnalysisRequest, user_id: str) -> AnalysisView:
+        analysis = self.create(request, user_id)
         return self._execute(analysis.id, request)
 
-    def create(self, request: AnalysisRequest) -> AnalysisView:
+    def create(self, request: AnalysisRequest, user_id: str) -> AnalysisView:
         """Validate and persist the job before any slow provider calls."""
         self._validate_model(request)
         analysis_id = str(uuid4())
-        self._repository.create_running(analysis_id, request)
-        return self._repository.get(analysis_id)
+        self._repository.create_running(analysis_id, request, user_id)
+        return self._repository.get(analysis_id, user_id)
 
-    def prepare(self, request: AnalysisRequest) -> tuple[AnalysisView, StockSnapshot]:
+    def prepare(self, request: AnalysisRequest, user_id: str) -> tuple[AnalysisView, StockSnapshot]:
         """Verify stock symbol availability before creating a background analysis."""
         self._validate_model(request)
         snapshot = self._market_data.get_stock_snapshot(request.symbol)
-        return self.create(request), snapshot
+        return self.create(request, user_id), snapshot
 
     def _validate_model(self, request: AnalysisRequest) -> None:
         if request.model not in self._allowed_models:
@@ -97,7 +97,7 @@ class AnalysisService:
             self._repository.fail(analysis_id, "Unexpected analysis failure")
             raise
 
-        return self._repository.get(analysis_id)
+        return self._repository.get_for_worker(analysis_id)
 
     def _get_fundamentals(self, symbol: str) -> FundamentalsSnapshot:
         try:
@@ -107,8 +107,8 @@ class AnalysisService:
         except Exception:
             return unavailable_fundamentals(symbol)
 
-    def get(self, analysis_id: str) -> AnalysisView:
-        return self._repository.get(analysis_id)
+    def get(self, analysis_id: str, user_id: str) -> AnalysisView:
+        return self._repository.get(analysis_id, user_id)
 
-    def list_recent(self, limit: int = 20) -> list[AnalysisView]:
-        return self._repository.list_recent(limit)
+    def list_recent(self, user_id: str, limit: int = 20, offset: int = 0) -> list[AnalysisView]:
+        return self._repository.list_recent(user_id, limit, offset)
