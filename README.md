@@ -14,8 +14,9 @@ background jobs can be replaced or extended for a future cloud product.
 Account access is now required for all stock research. Configure Cognito and run
 the database migration before use; see [account setup](docs/accounts.md). Without
 authentication settings, private features remain locked and `/ready` returns 503.
-The repository includes the implementation and an Oregon Cognito template;
-these changes have not been deployed to the running Lightsail environment.
+The Oregon Cognito stack is provisioned and its hosted account pages are ready.
+The account-system application release and database migration are still pending
+SSH access to the existing Lightsail server; see the setup record for status.
 
 ## MVP features
 
@@ -349,7 +350,7 @@ access IP, SSH key, and budget notification settings before deployment; a domain
 is needed only for the optional HTTPS mode.
 
 - PostgreSQL and per-user ownership of saved analyses
-- Live Cognito provisioning and account-system deployment (implementation is in place)
+- Account-system application deployment (Cognito is provisioned; SSH access is pending)
 - SQS-style background jobs for long-running multi-agent analysis
 - Independent technical, fundamental, risk, and contrarian agents plus a judge
 - Scheduled watchlists and email reports

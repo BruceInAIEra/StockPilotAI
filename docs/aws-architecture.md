@@ -185,7 +185,8 @@ not an automatic hosting upgrade.
 - The approved first implementation uses email/password signup and sign-in with
   verified email through Cognito managed login. Application sessions, profiles,
   password changes, private report ownership, and paginated history are implemented;
-  live provisioning and deployment remain pending. See [account setup](accounts.md).
+  Cognito is provisioned in staging; application deployment remains pending SSH
+  access. See [account setup](accounts.md).
 - Passwordless email/SMS is a possible later extension, not the current login flow.
 - Cognito passwordless email/SMS authentication requires Essentials or Plus and
   the app client's `ALLOW_USER_AUTH` flow.

@@ -12,10 +12,13 @@ and a browser administration console are outside this release.
 ## What is implemented and what still needs setup
 
 The application, migration, tests, and Cognito template are implemented in the
-repository. This change does not deploy resources or alter the running Lightsail
-release. Real signups require a deployed Cognito pool/client/domain, a session
-encryption key, and a release with the new migration. Missing authentication
-configuration locks private features and makes `/ready` return 503.
+repository. The Oregon Cognito stack `stockpilot-staging-auth` was provisioned on
+November 3, 2026. Its managed sign-in, signup, and recovery pages are available.
+The account-system application release is still pending SSH access to Lightsail;
+the running app has not been migrated or connected to Cognito yet. The release
+must configure the pool/client/domain, generate a session encryption key, and run
+the migration. Missing authentication configuration locks private features in the
+new code and makes `/ready` return 503.
 
 `infra/auth/cognito.yaml` is a separate CloudFormation stack; it does not modify
 the imported Lightsail stack or open its firewall. Deploy only in the confirmed
@@ -180,8 +183,9 @@ AWS managed Cognito rules were pinned to registry revision
 `7f7340c26ae5d5e8874651dbffeb12e0e9f505b6`: the MFA configuration rule passes;
 the unauthenticated identity-pool rule is not applicable because this template
 creates no identity pool. This is limited rule coverage, not a complete security
-assessment. Account-aware CloudFormation validation and live Cognito smoke tests
-remain required before calling the deployment ready.
+assessment. Account-aware CloudFormation change-set validation passed on
+November 3, 2026. Real-user verification-email delivery and end-to-end sign-in
+through the deployed application remain untested.
 
 Live setup check, November 2, 2026 (America/Los_Angeles): AWS login for the
 `stockpilot` profile was refreshed successfully, and the existing Oregon staging
@@ -191,3 +195,19 @@ this role also could not read that policy. The plan-status API returned missing
 project data, so the free/paid plan remains unconfirmed. No Cognito resources
 were created and the running application was not changed. The project owner or
 AWS Support must clarify the Cognito restriction before live setup continues.
+
+November 3 update: the Cognito restriction was resolved and AWS login refreshed.
+The approved `accounts-20261103` change set added only the user pool, app client,
+managed domain, and branding; the separate stack reached `CREATE_COMPLETE`.
+Stack termination protection, user-pool deletion protection, optional software
+TOTP, the password policy, callback URLs, token revocation, and refresh rotation
+were verified. Sign-in, signup, and recovery pages returned their expected forms;
+OIDC discovery and signing keys were also verified. No users were created and no
+email was sent by these checks. Retrieve identifiers from the stack outputs.
+
+The plan-status API still returns missing project data; the user confirmed a
+spend limit is configured. CloudTrail inspection remains denied, so durable
+CloudFormation audit retention is unverified. The app deployment is waiting for
+access to the existing Lightsail SSH key: macOS denied reading Downloads. No
+runtime secrets, server files, database schema, or running app services have
+been changed by this provisioning step.

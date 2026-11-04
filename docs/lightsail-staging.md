@@ -30,6 +30,21 @@ SSH aliases describe this particular import and must be checked before reuse.
 
 ## How the release was performed
 
+Account-system update, November 3, 2026: the separate Cognito stack
+`stockpilot-staging-auth` reached `CREATE_COMPLETE` in Oregon. Its approved change
+set added a user pool, app client, managed login domain, and client branding.
+Stack termination protection and user-pool deletion protection are enabled.
+The managed sign-in, signup, and recovery forms, OIDC discovery, and signing keys
+were verified; actual user signup, email delivery, and app sign-in remain untested.
+Retrieve pool/client/domain identifiers from the stack outputs.
+
+The account-system app release (`6fd049e4cc9f3ef78e2cc814c3dbd3762f965944`) is
+waiting for access to the existing Lightsail SSH key. The running application
+and database remain at the initial release recorded above. No server migration
+or runtime-secret update has occurred. See [account setup](accounts.md) for the
+remaining steps. CloudTrail inspection is still denied; durable audit logging
+remains unverified.
+
 1. AWS API calls prepared and reviewed an import-only change set, imported the
    existing instance, enabled termination protection, and checked stack drift.
    The import preserved the server and its firewall configuration.
