@@ -15,8 +15,9 @@ Account access is now required for all stock research. Configure Cognito and run
 the database migration before use; see [account setup](docs/accounts.md). Without
 authentication settings, private features remain locked and `/ready` returns 503.
 The Oregon Cognito stack is provisioned and its hosted account pages are ready.
-The account-system application release and database migration are still pending
-SSH access to the existing Lightsail server; see the setup record for status.
+The account-system application and database migration are deployed to restricted
+Lightsail staging. Use the SSH tunnel at `http://localhost:18000`; see the setup
+record for verification details and the remaining real-user sign-in smoke test.
 
 ## MVP features
 
@@ -350,7 +351,7 @@ access IP, SSH key, and budget notification settings before deployment; a domain
 is needed only for the optional HTTPS mode.
 
 - PostgreSQL and per-user ownership of saved analyses
-- Account-system application deployment (Cognito is provisioned; SSH access is pending)
+- Real-user signup/email verification and signed-in analysis smoke testing in staging
 - SQS-style background jobs for long-running multi-agent analysis
 - Independent technical, fundamental, risk, and contrarian agents plus a judge
 - Scheduled watchlists and email reports

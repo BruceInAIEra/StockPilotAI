@@ -14,11 +14,12 @@ and a browser administration console are outside this release.
 The application, migration, tests, and Cognito template are implemented in the
 repository. The Oregon Cognito stack `stockpilot-staging-auth` was provisioned on
 November 3, 2026. Its managed sign-in, signup, and recovery pages are available.
-The account-system application release is still pending SSH access to Lightsail;
-the running app has not been migrated or connected to Cognito yet. The release
-must configure the pool/client/domain, generate a session encryption key, and run
-the migration. Missing authentication configuration locks private features in the
-new code and makes `/ready` return 503.
+Application commit `6fd049e4cc9f3ef78e2cc814c3dbd3762f965944` was deployed to
+Lightsail on the same date. Its runtime is connected to Cognito, its session key
+was generated on the server, and the database is at migration `20261102_0002`.
+Missing authentication configuration locks private features and makes `/ready`
+return 503. Real-user email verification and signed-in analysis still need a
+user smoke test.
 
 `infra/auth/cognito.yaml` is a separate CloudFormation stack; it does not modify
 the imported Lightsail stack or open its firewall. Deploy only in the confirmed
@@ -207,7 +208,29 @@ email was sent by these checks. Retrieve identifiers from the stack outputs.
 
 The plan-status API still returns missing project data; the user confirmed a
 spend limit is configured. CloudTrail inspection remains denied, so durable
-CloudFormation audit retention is unverified. The app deployment is waiting for
-access to the existing Lightsail SSH key: macOS denied reading Downloads. No
-runtime secrets, server files, database schema, or running app services have
-been changed by this provisioning step.
+CloudFormation audit retention is unverified. macOS denied reading Downloads;
+the user subsequently identified an accessible credentials folder and authorized
+the existing Lightsail key there. It was used without copying or displaying the
+private key, with strict checking against the previously trusted SSH host key.
+
+The approved application commit was transferred as a checksum-verified Git
+archive, built on the server, and deployed through the existing release script.
+An isolated container with no runtime secrets or network access passed 115 tests;
+the PostgreSQL integration test was skipped in that container and had passed
+locally. Pre- and post-migration logical backups were created and validated with
+`pg_restore --list`. Runtime settings were updated atomically, preserving the
+database password and OpenAI key; the session encryption key was generated on
+the server. The runtime file remains root-owned mode 0600.
+
+The live schema matches the application models (`alembic check` passed). Both
+preexisting reports survived with no owner, so they are hidden until deliberately
+assigned. The app and database are healthy, the backup timer is active, the app
+listens only on server loopback, and PostgreSQL has no published host port.
+Anonymous research pages redirect to login; anonymous analysis API requests return
+401. Signup and recovery redirect to the correct Cognito domain. The browser's
+Create account link reached the expected Cognito signup form through the SSH
+tunnel at `http://localhost:18000`. No real users were registered by these checks;
+email delivery, verified-user sign-in, and signed-in stock analysis remain to be
+tested with a user's own account. Temporary deployment files and the test-only
+image were removed; previous releases, runtime backup, and database backups were
+retained.

@@ -231,6 +231,8 @@ subscriptions, GitHub OIDC CI/CD, and Fargate/RDS remain later work.
 The account-system application code and a separate Cognito template are now
 available in `auth/cognito.yaml`; see [account setup](../docs/accounts.md).
 The separate `stockpilot-staging-auth` stack was provisioned on November 3, 2026;
-its managed account pages are available. The application release is pending
-SSH access to the existing host. Populate the new runtime settings and run the
-migration during that release before treating application authentication as live.
+its managed account pages are available. Application commit `6fd049e` and the
+account migration are also deployed. Runtime settings, private access enforcement,
+database preservation, and backup health were verified. A real-user signup,
+email-verification, sign-in, and signed-in analysis smoke test remains; see the
+account setup record before a public launch.

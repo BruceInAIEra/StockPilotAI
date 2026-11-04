@@ -1,7 +1,8 @@
 # Lightsail staging deployment record
 
-Verified November 1, 2026 (America/Los_Angeles). This records the initial
-deployment; recheck AWS and the host before changing or recovering it. Public
+Initial deployment verified November 1, 2026; account-system release verified
+November 3, 2026 (America/Los_Angeles). Recheck AWS and the host before changing
+or recovering it. Public
 addresses, operator IP, project identifiers, credentials, and private key paths
 are intentionally kept outside this record.
 
@@ -15,7 +16,9 @@ are intentionally kept outside this record.
 | Image and bundle | Ubuntu 24.04 LTS, x86-64; `ubuntu_24_04`, `small_3_0` (2 GB RAM, selected $12 plan) |
 | Protection | Stack termination protection enabled; instance deletion and replacement policies both `Retain` |
 | Drift check | `IN_SYNC`; zero drifted resources after import |
-| Application release | Commit `e52200b87e17e022368a182f8e23c36eca30122c` |
+| Application release | Commit `6fd049e4cc9f3ef78e2cc814c3dbd3762f965944`; prior release retained |
+| Account schema | Alembic `20261102_0002`; schema/model consistency check passed |
+| Cognito stack | `stockpilot-staging-auth`; `CREATE_COMPLETE`; termination protection enabled |
 | Running services | FastAPI/Uvicorn and PostgreSQL 17 in Docker Compose; Caddy disabled |
 | Application access | Server `127.0.0.1:8000`, reached through a laptop SSH tunnel at `http://localhost:18000/` |
 | Firewall | TCP 22 from the operator's IPv4 `/32`, plus preserved `lightsail-connect` and `lightsail-connect-ipv6` browser SSH aliases; no HTTP/HTTPS/app/DB rules |
@@ -38,12 +41,24 @@ The managed sign-in, signup, and recovery forms, OIDC discovery, and signing key
 were verified; actual user signup, email delivery, and app sign-in remain untested.
 Retrieve pool/client/domain identifiers from the stack outputs.
 
-The account-system app release (`6fd049e4cc9f3ef78e2cc814c3dbd3762f965944`) is
-waiting for access to the existing Lightsail SSH key. The running application
-and database remain at the initial release recorded above. No server migration
-or runtime-secret update has occurred. See [account setup](accounts.md) for the
-remaining steps. CloudTrail inspection is still denied; durable audit logging
-remains unverified.
+The account-system app release (`6fd049e4cc9f3ef78e2cc814c3dbd3762f965944`) was
+deployed with the existing Lightsail key from the user-authorized credentials
+folder. The source archive checksum was verified. An isolated server container
+passed 115 tests with no network or runtime secrets; the PostgreSQL integration
+test was skipped there and had passed locally. Pre- and post-migration dumps were
+validated as readable. The new session encryption key was generated on the server;
+the existing provider key and database password were preserved. The schema was
+migrated and `alembic check` found no differences from the code.
+
+Both existing reports were preserved with no owner. The app and database are
+healthy, the daily backup timer is enabled and active, and runtime secrets remain
+root-owned mode 0600. Anonymous private-page requests redirect to login, anonymous
+research API requests return 401, and signup/recovery redirect to Cognito. The
+browser's Create account flow reached Cognito through the localhost SSH tunnel.
+Real-user email delivery, verified sign-in, and signed-in analysis remain untested.
+Temporary release files and the test-only image were removed. CloudTrail inspection
+is still denied; durable audit logging remains unverified. See
+[account setup](accounts.md) for session behavior and the remaining smoke test.
 
 1. AWS API calls prepared and reviewed an import-only change set, imported the
    existing instance, enabled termination protection, and checked stack drift.
@@ -74,7 +89,7 @@ secret handling, the tunnel command, and recovery steps.
 - The committed SSH-mode smoke test passed on the actual server: migrations,
   database readiness, loopback-only access, disabled Caddy, and logical
   backup/restore. Its temporary containers and volumes were removed.
-- The deployed home page returned HTTP 200 and `/ready` returned `{"status":"ok"}`
+- At the initial release, the home page returned HTTP 200 and `/ready` returned `{"status":"ok"}`
   through the SSH tunnel. Both service containers were healthy. The app port
   listened only on loopback; PostgreSQL had no published host port.
 - The backup timer was enabled and active, and its service completed successfully.
