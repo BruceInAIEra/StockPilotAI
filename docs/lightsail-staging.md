@@ -16,7 +16,7 @@ are intentionally kept outside this record.
 | Image and bundle | Ubuntu 24.04 LTS, x86-64; `ubuntu_24_04`, `small_3_0` (2 GB RAM, selected $12 plan) |
 | Protection | Stack termination protection enabled; instance deletion and replacement policies both `Retain` |
 | Drift check | `IN_SYNC`; zero drifted resources after import |
-| Application release | Commit `6fd049e4cc9f3ef78e2cc814c3dbd3762f965944`; prior release retained |
+| Application release | Commit `1e5c5afd8747c9cc44583e901def088edb96c8dc`; prior releases retained |
 | Account schema | Alembic `20261102_0002`; schema/model consistency check passed |
 | Cognito stack | `stockpilot-staging-auth`; `CREATE_COMPLETE`; termination protection enabled |
 | Running services | FastAPI/Uvicorn and PostgreSQL 17 in Docker Compose; Caddy disabled |
@@ -32,6 +32,18 @@ existing server's `<stack-name>-server` name. Its blueprint, bundle, and browser
 SSH aliases describe this particular import and must be checked before reuse.
 
 ## How the release was performed
+
+Form-origin fix, November 3, 2026: a real browser reproduced the reported
+`Request origin did not match` error. The global `no-referrer` policy caused
+same-origin HTML forms to send `Origin: null`. App responses now use `same-origin`;
+the OAuth callback retains `no-referrer`. Origin and CSRF-token checks remain
+strict, including rejection of cross-site and null origins. The same browser
+successfully completed a mock-provider analysis after the fix. Regression tests
+passed (117 passed, one PostgreSQL test skipped in this run). Commit `1e5c5af`
+was deployed through the backup-and-release workflow. The live header values,
+callback privacy, anonymous API restriction, readiness, and container health
+were verified. Existing runtime secrets, sessions, and schema were preserved.
+Users must reload previously opened forms to receive the corrected policy.
 
 Account-system update, November 3, 2026: the separate Cognito stack
 `stockpilot-staging-auth` reached `CREATE_COMPLETE` in Oregon. Its approved change
