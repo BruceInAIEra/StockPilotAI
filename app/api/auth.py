@@ -30,7 +30,10 @@ class AccountAccessMiddleware:
                 headers.extend([
                     (b"x-content-type-options", b"nosniff"),
                     (b"x-frame-options", b"DENY"),
-                    (b"referrer-policy", b"no-referrer"),
+                    # no-referrer makes browsers send Origin: null for form POSTs.
+                    # Preserve same-origin form origins, while keeping OAuth query
+                    # parameters off all subsequent requests from the callback.
+                    (b"referrer-policy", b"no-referrer" if path == "/auth/callback" else b"same-origin"),
                     (b"content-security-policy", (
                         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
                         "img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; "

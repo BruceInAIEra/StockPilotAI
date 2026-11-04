@@ -149,6 +149,10 @@ backup, and prefer a forward fix over deploying pre-authentication code.
   it lasts at most one hour unless the operator disables the local user or deletes
   their app sessions. Immediate event-driven provider revocation is future work.
 - Private responses are `no-store`; HTML receives CSP and anti-framing headers.
+  App pages use `Referrer-Policy: same-origin` so browser form POSTs preserve
+  their Origin header. The OAuth callback alone uses `no-referrer` to suppress
+  authorization query strings. A global `no-referrer` policy must not be restored:
+  browsers can then send `Origin: null` even for same-origin form submissions.
   Password validation errors omit submitted values. Uvicorn callback access logs
   redact query strings; any upstream proxy must also omit callback query strings.
 

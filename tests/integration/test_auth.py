@@ -94,7 +94,8 @@ def test_private_history_detail_and_unassigned_legacy_records(tmp_path):
         assert [row["id"] for row in client.get("/api/v1/analyses").json()] == [first["id"]]
 
 
-def test_cookie_session_requires_csrf_and_same_origin(tmp_path):
+@pytest.mark.parametrize("origin", ["https://attacker.example", "null"])
+def test_cookie_session_requires_csrf_and_same_origin(tmp_path, origin):
     with make_client(tmp_path) as client:
         csrf = client.headers.pop("x-csrf-token")
         assert client.post("/api/v1/analyses", json={"symbol": "AAPL", "model": "test-model"}).status_code == 403
@@ -103,8 +104,22 @@ def test_cookie_session_requires_csrf_and_same_origin(tmp_path):
         assert client.post("/logout").status_code == 403
         assert client.post("/analyze", data={**form, "csrf_token": "forged"}).status_code == 403
         assert client.post("/analyze", data={**form, "csrf_token": csrf},
-                           headers={"origin": "https://attacker.example"}).status_code == 403
+                           headers={"origin": origin}).status_code == 403
         response = client.post("/analyze", data={**form, "csrf_token": csrf}, follow_redirects=False)
+        assert response.status_code == 303
+        assert client.get(response.headers["location"]).status_code == 200
+
+
+def test_form_pages_preserve_origin_and_oauth_callback_suppresses_referrers(tmp_path):
+    with make_client(tmp_path) as client:
+        for path in ("/", "/account", "/history"):
+            assert client.get(path).headers["referrer-policy"] == "same-origin"
+        assert client.get("/auth/callback").headers["referrer-policy"] == "no-referrer"
+        csrf = client.headers.pop("x-csrf-token")
+        response = client.post("/analyze", data={
+            "symbol": "AAPL", "horizon": "medium_term", "position": "not_owned",
+            "model": "test-model", "csrf_token": csrf,
+        }, headers={"origin": client.app.state.container.settings.app_base_url}, follow_redirects=False)
         assert response.status_code == 303
         assert client.get(response.headers["location"]).status_code == 200
 
