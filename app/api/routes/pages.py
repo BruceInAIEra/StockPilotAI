@@ -26,10 +26,11 @@ templates.env.filters["financial_number"] = financial_number
 
 
 def _page_context(request: Request, container: AppContainer) -> dict[str, object]:
+    current = container.admin_service.model_settings()
     return {
         "request": request,
-        "models": container.settings.allowed_models,
-        "default_model": container.settings.openai_default_model,
+        "models": current.models,
+        "default_model": current.default,
         "history": container.analysis_service.list_recent(request.state.user.id, 12),
     }
 

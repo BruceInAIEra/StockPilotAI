@@ -365,6 +365,9 @@ footer { padding: 22px 0 35px; border-top: 1px solid var(--line); color: var(--m
 .account-panel { max-width: 560px; margin: 0 auto 24px; }
 .account-panel h2 { margin-bottom: 16px; }
 .account-panel p { line-height: 1.6; }
+.admin-model-option { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+.account-panel code { overflow-wrap: anywhere; }
+.account-panel input[name="reason"] { padding: 12px 14px; }
 .account-panel dd { margin: 8px 0 16px; overflow-wrap: anywhere; }
 .account-panel input[type="password"] { padding: 12px 14px; }
 .account-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-block: 24px; }

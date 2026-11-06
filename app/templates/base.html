@@ -23,6 +23,7 @@
         <a href="/">My research</a>
         <a href="/history">My history</a>
         <a href="/account">My account</a>
+        {% if request.state.user.role == "admin" %}<a href="/admin">Admin</a>{% endif %}
         <form action="/logout" method="post">
           <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
           <button type="submit">Sign out</button>

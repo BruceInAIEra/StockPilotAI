@@ -41,3 +41,29 @@ def test_migration_preserves_unassigned_history_and_explicit_claim(tmp_path, mon
         command.check(config)
     finally:
         get_settings.cache_clear()
+
+
+def test_admin_migration_defaults_existing_users_and_preserves_sessions(tmp_path, monkeypatch):
+    path = tmp_path / "existing-users.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{path}")
+    get_settings.cache_clear()
+    config = Config("alembic.ini")
+    try:
+        command.upgrade(config, "20261102_0002")
+        with sqlite3.connect(path) as db:
+            db.execute("""INSERT INTO users (id, issuer, subject, email, created_at, disabled)
+                       VALUES ('existing-user', 'issuer', 'subject', 'existing@example.com', '2026-11-01', 0)""")
+            db.execute("""INSERT INTO auth_sessions
+                       (token_hash, user_id, csrf_token, expires_at, encrypted_tokens)
+                       VALUES ('hash', 'existing-user', 'csrf', '2026-11-06', 'encrypted')""")
+        command.upgrade(config, "head")
+        command.check(config)
+        with sqlite3.connect(path) as db:
+            assert db.execute("SELECT role FROM users WHERE id='existing-user'").fetchone() == ("user",)
+            assert db.execute("SELECT user_id FROM auth_sessions").fetchone() == ("existing-user",)
+        command.downgrade(config, "20261102_0002")
+        with sqlite3.connect(path) as db:
+            assert db.execute("SELECT subject FROM users").fetchone() == ("subject",)
+            assert db.execute("SELECT user_id FROM auth_sessions").fetchone() == ("existing-user",)
+    finally:
+        get_settings.cache_clear()

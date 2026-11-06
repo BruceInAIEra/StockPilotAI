@@ -1,5 +1,7 @@
 # StockPilotAI
 
+Application administration: see [admin setup and Lightsail commands](docs/admin.md).
+
 StockPilotAI is a local-first web application that combines company fundamentals,
 valuation, recent news and catalysts, deterministic technical indicators, and structured OpenAI analysis to suggest one of
 four research actions: **Buy**, **Hold**, **Sell**, or **Watch**.

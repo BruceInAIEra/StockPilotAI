@@ -76,3 +76,45 @@ def test_migrations_and_analysis_survive_app_restart(postgres_settings, tmp_path
 
     command.downgrade(config, "base")
     command.upgrade(config, "head")
+
+
+def test_admin_role_settings_and_concurrent_updates(postgres_settings, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from app.services.admin_service import SettingsConflict, assign_role
+
+    command.upgrade(Config("alembic.ini"), "head")
+    with make_client(tmp_path, settings=postgres_settings) as client:
+        factory = client.app.state.session_factory
+        issuer = client.app.state.container.settings.cognito_issuer
+        principals = []
+        for subject in ("first-admin", "second-admin"):
+            client.sign_in(subject, f"{subject}@example.com")
+            assign_role(factory, issuer, subject, "admin", actor="operator:test",
+                        reason="PostgreSQL admin test", apply=True)
+            assert client.get("/api/v1/models").status_code == 401
+            principals.append(client.sign_in(subject, f"{subject}@example.com"))
+        service = client.app.state.container.admin_service
+        barrier = Barrier(2)
+
+        def save(principal):
+            barrier.wait(timeout=10)
+            try:
+                service.save_models(principal, "test-model", ["test-model"], 0, "Concurrent update")
+                return "saved"
+            except SettingsConflict:
+                return "conflict"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            assert sorted(pool.map(save, principals)) == ["conflict", "saved"]
+        assert service.model_settings().version == 1
+        assert len([e for e in service.recent_audit() if e.action == "models.change"]) == 1
+        assert client.get("/admin").status_code == 200
+        assign_role(factory, issuer, "second-admin", "user", actor="operator:test",
+                    reason="Revoke test admin", apply=True)
+        assert client.get("/api/v1/models").status_code == 401
+        assert client.sign_in("second-admin", "second-admin@example.com").role == "user"
+        assert client.get("/admin").status_code == 403
+    with make_client(tmp_path, settings=postgres_settings) as client:
+        assert client.app.state.container.admin_service.model_settings().version == 1

@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.api.dependencies import AppContainer
-from app.api.routes import api, auth, health, pages
+from app.api.routes import admin, api, auth, health, pages
 from app.api.auth import AccountAccessMiddleware, validate_csrf
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -23,6 +23,7 @@ from app.repositories.analysis_repository import AnalysisRepository
 from app.repositories.database import Base, create_session_factory
 from app.services.analysis_service import AnalysisService
 from app.services.auth_service import AuthService
+from app.services.admin_service import AdminService, ModelsUnavailable
 
 
 def create_app(
@@ -49,11 +50,13 @@ def create_app(
         timeout_seconds=settings.openai_timeout_seconds,
         max_retries=settings.openai_max_retries,
     )
+    admin_service = AdminService(session_factory, settings)
     analysis_service = AnalysisService(
         market_data=configured_market_provider,
         analysis_engine=configured_analysis_engine,
         repository=repository,
         allowed_models=settings.allowed_models,
+        model_settings_provider=admin_service.model_settings,
         fundamentals_provider=fundamentals_provider or YahooFundamentalsProvider(),
         news_provider=news_provider or YahooNewsProvider(),
     )
@@ -85,10 +88,16 @@ def create_app(
     )
     application.state.container = AppContainer(
         settings=settings,
+        admin_service=admin_service,
         analysis_service=analysis_service,
         auth_service=AuthService(session_factory, settings, auth_provider),
     )
     application.state.session_factory = session_factory
+
+    @application.exception_handler(ModelsUnavailable)
+    async def unavailable_models(request, exc):
+        return JSONResponse(status_code=503, content={"detail": str(exc)})
+
     @application.exception_handler(RequestValidationError)
     async def safe_validation_error(request, exc):
         # Never echo passwords, tokens, or other submitted values in error bodies.
@@ -99,6 +108,7 @@ def create_app(
     application.mount("/static", StaticFiles(directory="app/static"), name="static")
     application.include_router(health.router)
     application.include_router(auth.router)
+    application.include_router(admin.router)
     application.include_router(api.router)
     application.include_router(pages.router)
     application.add_middleware(AccountAccessMiddleware, auth_service=application.state.container.auth_service)

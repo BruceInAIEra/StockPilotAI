@@ -13,10 +13,8 @@ router = APIRouter(prefix="/api/v1", tags=["api"])
 def models(
     container: Annotated[AppContainer, Depends(get_container)],
 ) -> dict[str, object]:
-    return {
-        "default": container.settings.openai_default_model,
-        "models": list(container.settings.allowed_models),
-    }
+    current = container.admin_service.model_settings()
+    return {"default": current.default, "models": list(current.models)}
 
 
 @router.post(

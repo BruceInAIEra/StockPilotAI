@@ -55,6 +55,7 @@ class Principal:
     email: str
     csrf_token: str
     session_hash: str
+    role: str = "user"
 
 
 class CognitoProvider:
@@ -215,7 +216,7 @@ class AuthService:
                             "refresh_token": identity.refresh_token,
                         }).encode()).decode(),
                     ))
-                    principal = Principal(user.id, user.email, csrf, digest(token))
+                    principal = Principal(user.id, user.email, csrf, digest(token), user.role)
                     db.commit()
                     return token, principal
             except IntegrityError:
@@ -236,7 +237,7 @@ class AuthService:
             if not row:
                 return None
             session, user = row
-            return Principal(user.id, user.email, session.csrf_token, session.token_hash)
+            return Principal(user.id, user.email, session.csrf_token, session.token_hash, user.role)
 
     def _tokens(self, principal: Principal) -> dict:
         with self.factory() as db:

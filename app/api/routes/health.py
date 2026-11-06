@@ -3,7 +3,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.repositories.database import AnalysisRecord, AuthSessionRecord, LoginAttemptRecord, UserRecord
+from app.repositories.database import (
+    AdminAuditRecord, AnalysisRecord, AppSettingRecord, AuthSessionRecord, LoginAttemptRecord, UserRecord,
+)
 
 router = APIRouter(tags=["health"])
 
@@ -19,7 +21,7 @@ def ready(request: Request) -> JSONResponse:
         with request.app.state.session_factory() as session:
             # Check both connectivity and the table required to serve requests.
             session.execute(select(AnalysisRecord.id, AnalysisRecord.user_id).limit(0))
-            for model in (UserRecord, AuthSessionRecord, LoginAttemptRecord):
+            for model in (UserRecord, AuthSessionRecord, LoginAttemptRecord, AppSettingRecord, AdminAuditRecord):
                 session.execute(select(model).limit(0))
     except SQLAlchemyError:
         return JSONResponse({"status": "not_ready"}, status_code=503)

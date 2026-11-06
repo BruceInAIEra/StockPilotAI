@@ -6,8 +6,9 @@ health endpoints are public. There is no guest analysis mode or default admin.
 
 The app uses Cognito managed login for email/password registration, email
 verification, sign-in, and recovery. The app has its own profile and password
-change page, a private dashboard, and paginated history. Social login, billing,
-and a browser administration console are outside this release.
+change page, a private dashboard, paginated history, and an admin model-settings
+page. Social login and billing are outside this release. See [Administration](admin.md)
+for server-only role assignment and production setup.
 
 ## What is implemented and what still needs setup
 

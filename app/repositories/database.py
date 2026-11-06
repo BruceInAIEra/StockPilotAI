@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, String, Text, UniqueConstraint, create_engine
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -14,7 +14,10 @@ class Base(DeclarativeBase):
 
 class UserRecord(Base):
     __tablename__ = "users"
-    __table_args__ = (UniqueConstraint("issuer", "subject", name="uq_users_identity"),)
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="uq_users_identity"),
+        CheckConstraint("role IN ('user', 'admin')", name="ck_users_role"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     issuer: Mapped[str] = mapped_column(String(255))
@@ -22,6 +25,28 @@ class UserRecord(Base):
     email: Mapped[str] = mapped_column(String(320))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     disabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    role: Mapped[str] = mapped_column(String(20), default="user", server_default="user")
+
+
+class AppSettingRecord(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSON)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class AdminAuditRecord(Base):
+    __tablename__ = "admin_audit"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    actor: Mapped[str] = mapped_column(String(255))
+    action: Mapped[str] = mapped_column(String(100))
+    target: Mapped[str] = mapped_column(String(255))
+    before: Mapped[dict[str, Any]] = mapped_column(JSON)
+    after: Mapped[dict[str, Any]] = mapped_column(JSON)
+    reason: Mapped[str] = mapped_column(String(500))
 
 
 class AuthSessionRecord(Base):

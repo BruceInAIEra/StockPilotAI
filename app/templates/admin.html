@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Administration · StockPilotAI{% endblock %}
+{% block content %}
+<section class="hero account-hero">
+  <div class="eyebrow">Administration</div>
+  <h1>Model settings</h1>
+  <p>Choose which models are available for new research. Existing reports keep their original model.</p>
+</section>
+<section class="panel account-panel">
+  <h2>Available models</h2>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/admin/models">
+    <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
+    <input type="hidden" name="version" value="{{ current.version }}">
+    <fieldset>
+      <legend>Enable at least one model</legend>
+      {% for model in available_models %}
+      <label class="admin-model-option"><input type="checkbox" name="models" value="{{ model }}" {% if model in current.models %}checked{% endif %}> {{ model }}</label>
+      {% endfor %}
+    </fieldset>
+    <label for="default">Default model</label>
+    <select id="default" name="default" required>
+      {% for model in available_models %}<option value="{{ model }}" {% if model == current.default %}selected{% endif %}>{{ model }}</option>{% endfor %}
+    </select>
+    <label for="reason">Reason for change</label>
+    <input id="reason" name="reason" type="text" maxlength="500" required>
+    <button class="primary-button" type="submit">Save model settings</button>
+  </form>
+</section>
+<section class="panel account-panel">
+  <h2>Recent administration changes</h2>
+  {% for entry in audit %}
+  <article>
+    <h3>{{ entry.action }} · {{ entry.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</h3>
+    <p>By {{ entry.actor }} · Target {{ entry.target }}</p>
+    <p>{{ entry.reason }}</p>
+    <p>Before: <code>{{ entry.before | tojson }}</code></p>
+    <p>After: <code>{{ entry.after | tojson }}</code></p>
+  </article>
+  {% else %}<p>No administration changes yet.</p>{% endfor %}
+</section>
+{% endblock %}

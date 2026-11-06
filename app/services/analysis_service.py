@@ -26,11 +26,13 @@ class AnalysisService:
         allowed_models: tuple[str, ...],
         fundamentals_provider: FundamentalsProvider | None = None,
         news_provider: NewsProvider | None = None,
+        model_settings_provider=None,
     ) -> None:
         self._market_data = market_data
         self._analysis_engine = analysis_engine
         self._repository = repository
         self._allowed_models = allowed_models
+        self._model_settings_provider = model_settings_provider
         self._fundamentals_provider = fundamentals_provider
         self._news_provider = news_provider
 
@@ -52,8 +54,10 @@ class AnalysisService:
         return self.create(request, user_id), snapshot
 
     def _validate_model(self, request: AnalysisRequest) -> None:
-        if request.model not in self._allowed_models:
-            allowed = ", ".join(self._allowed_models)
+        models = (self._model_settings_provider().models if self._model_settings_provider
+                  else self._allowed_models)
+        if request.model not in models:
+            allowed = ", ".join(models)
             raise ValueError(f"Model '{request.model}' is not allowed. Choose one of: {allowed}")
 
     def run_background(
