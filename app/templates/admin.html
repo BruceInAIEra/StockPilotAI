@@ -54,11 +54,11 @@
   {% endif %}
   <div class="invitation-table-wrap">
   <table class="invitation-table">
-    <thead><tr><th>Code identifier</th><th>Created (UTC)</th><th>Created by</th><th>Status</th><th>Used by</th><th>Used (UTC)</th><th>Action</th></tr></thead>
+    <thead><tr><th>Invitation identifier</th><th>Created (UTC)</th><th>Created by</th><th>Status</th><th>Used by</th><th>Used (UTC)</th><th>Action</th></tr></thead>
     <tbody>
     {% for invitation, creator, recipient in invitations %}
     <tr>
-      <td><code>…{{ invitation.suffix }}</code></td>
+      <td><code>{% if invitation.suffix %}…{{ invitation.suffix }}{% else %}{{ invitation.id[:8] }}{% endif %}</code></td>
       <td>{{ invitation.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
       <td>{{ creator }}</td>
       <td>{% if invitation.used_at %}Used{% elif invitation.deactivated_at %}Deactivated{% else %}Available{% endif %}</td>

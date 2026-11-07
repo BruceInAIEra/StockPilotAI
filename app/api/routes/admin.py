@@ -80,6 +80,8 @@ def generate_invitation(request: Request):
         code = request.app.state.container.auth_service.invitations.generate(request.state.user)
     except PermissionError as exc:
         raise HTTPException(403, "Admin access required.") from exc
+    except InvitationError as exc:
+        return render(request, str(exc), 409)
     return render(request, generated_code=code)
 
 

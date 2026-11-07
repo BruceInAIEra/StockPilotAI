@@ -70,7 +70,7 @@ def test_signup_requires_csrf_origin_and_throttles_across_service_instances(tmp_
         assert client.post("/signup", data={"invitation_code": "bad"}).status_code == 403
         form = signup_form(client, "bad")
         assert client.post("/signup", data=form, headers={"origin": "https://evil.example"}).status_code == 403
-        for _ in range(20):
+        for _ in range(5):
             assert client.post("/signup", data=signup_form(client, "bad")).status_code == 400
         assert client.post("/signup", data=signup_form(client, "bad")).status_code == 429
         auth = client.app.state.container.auth_service
@@ -212,7 +212,7 @@ def test_admin_controls_authorization_csrf_policy_conflicts_and_history(tmp_path
         assert client.post("/admin/signup-policy", data={"version": 0}).status_code == 409
         page = client.post("/admin/invitations")
         code = re.search(r'id="generated-invitation" type="text" value="([^"]+)"', page.text)[1]
-        assert code not in client.get("/admin").text
+        assert 'id="generated-invitation"' not in client.get("/admin").text
         auth = client.app.state.container.auth_service
         with auth.factory() as db:
             invitation_id = db.scalar(select(InvitationRecord.id))
@@ -276,3 +276,65 @@ def test_callback_database_failure_shows_retry_message_and_preserves_invitation(
         client.post("/signup", data=signup_form(client, code), follow_redirects=False)
         state = client.cookies.get(LOGIN_COOKIE)
         assert client.get("/auth/callback", params={"code": "valid", "state": state}, follow_redirects=False).status_code == 303
+
+
+def test_short_codes_case_insensitivity_collision_retry_and_legacy_codes(tmp_path, monkeypatch):
+    from uuid import uuid4
+    from app.services.invitation_service import CODE_ALPHABET, InvitationError, code_digest
+    with make_client(tmp_path) as client:
+        admin, code, _ = setup_invitation(client)
+        auth = client.app.state.container.auth_service
+        assert len(code) == 4 and set(code) <= set(CODE_ALPHABET)
+        with auth.factory() as db:
+            row = db.scalar(select(InvitationRecord))
+            assert row.suffix == ""
+            assert auth.invitations.validate(db, f"  {code.lower()}  ") == row.id
+            assert code not in str(db.scalars(select(AdminAuditRecord.after)).all())
+            legacy = "AbCdEfGhIjKlMnOpQrStUvWxYz_1234567"
+            legacy_id = str(uuid4())
+            db.add(InvitationRecord(id=legacy_id, code_hash=code_digest(legacy), suffix=legacy[-8:],
+                                    created_by=admin.id))
+            db.commit()
+            assert auth.invitations.validate(db, legacy) == legacy_id
+            with pytest.raises(InvitationError):
+                auth.invitations.validate(db, legacy.lower())
+        # A collision with any existing code retries without losing history or audit atomicity.
+        alternate = "2345" if code != "2345" else "6789"
+        choices = iter(code + alternate)
+        monkeypatch.setattr("app.services.invitation_service.secrets.choice", lambda alphabet: next(choices))
+        assert auth.invitations.generate(admin) == alternate
+        with auth.factory() as db:
+            assert db.scalar(select(func.count()).select_from(InvitationRecord)) == 3
+            assert db.scalar(select(func.count()).select_from(AdminAuditRecord).where(
+                AdminAuditRecord.action == "invitation.create")) == 2
+
+
+def test_global_rate_limit_blocks_distributed_guesses_and_resets(tmp_path, monkeypatch):
+    from app.repositories.database import SignupThrottleRecord
+    from app.services.invitation_service import InvitationService
+    with make_client(tmp_path) as client:
+        auth = client.app.state.container.auth_service
+        service = auth.invitations
+        # Keep this test independent of a ten-minute boundary on the real clock.
+        import app.services.invitation_service as module
+        class FixedDatetime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2026, 11, 6, 12, 0, 0, tzinfo=UTC)
+        monkeypatch.setattr(module, "datetime", FixedDatetime)
+        for _ in range(5):
+            service.check_rate_limit("blocked-client")
+        for _ in range(110):
+            with pytest.raises(SignupRateLimited):
+                service.check_rate_limit("blocked-client")
+        # Rejected requests from that client have not exhausted the global allowance.
+        for i in range(95):
+            service.check_rate_limit(f"client-{i}")
+        other = InvitationService(auth.factory, auth.settings)
+        with pytest.raises(SignupRateLimited):
+            other.check_rate_limit("another-client")
+        with auth.factory() as db:
+            db.execute(update(SignupThrottleRecord).values(
+                expires_at=datetime(2026, 11, 6, 11, 0, 0, tzinfo=UTC)))
+            db.commit()
+        other.check_rate_limit("another-client")

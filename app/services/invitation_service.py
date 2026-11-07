@@ -33,8 +33,15 @@ def signup_policy(db, settings):
                         row.version if row else 0)
 
 
+CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+
+
 def code_digest(code):
-    return hashlib.sha256(code.strip().encode()).hexdigest()
+    code = code.strip()
+    # Only short codes are case-insensitive; preserve all existing long-code hashes.
+    if len(code) == 4 and code.isascii():
+        code = code.upper()
+    return hashlib.sha256(code.encode()).hexdigest()
 
 
 def require_actor(db, principal):
@@ -74,16 +81,25 @@ class InvitationService:
             raise SettingsConflict("Registration settings changed. Reload before saving.") from exc
 
     def generate(self, principal):
-        code = secrets.token_urlsafe(24)
-        with self.factory() as db:
-            require_actor(db, principal)
-            invitation = InvitationRecord(id=str(uuid4()), code_hash=code_digest(code),
-                                          suffix=code[-8:], created_by=principal.id)
-            db.add(invitation)
-            audit(db, principal.id, "invitation.create", invitation.id, {},
-                  {"status": "available", "suffix": invitation.suffix}, "Generated invitation")
-            db.commit()
-        return code
+        for _ in range(32):
+            code = "".join(secrets.choice(CODE_ALPHABET) for _ in range(4))
+            try:
+                with self.factory() as db:
+                    require_actor(db, principal)
+                    invitation = InvitationRecord(id=str(uuid4()), code_hash=code_digest(code),
+                                                  suffix="", created_by=principal.id)
+                    db.add(invitation)
+                    audit(db, principal.id, "invitation.create", invitation.id, {},
+                          {"status": "available"}, "Generated invitation")
+                    db.commit()
+                return code
+            except IntegrityError:
+                # Retry a code collision in a fresh transaction, retaining the unique constraint.
+                with self.factory() as db:
+                    if db.scalar(select(InvitationRecord.id).where(
+                            InvitationRecord.code_hash == code_digest(code))) is None:
+                        raise
+        raise InvitationError("Unable to generate a unique invitation. Please try again.")
 
     def deactivate(self, principal, invitation_id):
         with self.factory() as db:
@@ -108,29 +124,37 @@ class InvitationService:
             ).offset((page - 1) * 50).limit(50)).all()
 
     def check_rate_limit(self, address):
-        # Fixed ten-minute window, shared across processes. Do not trust forwarded IP headers.
+        # Shared fixed windows limit both individual and distributed guessing of short codes.
         now = datetime.now(UTC)
         window = int(now.timestamp()) // 600
-        key = hashlib.sha256(f"{address}:{window}".encode()).hexdigest()
         with self.factory() as db:
             db.execute(delete(SignupThrottleRecord).where(SignupThrottleRecord.expires_at <= now))
-            row = db.execute(update(SignupThrottleRecord).where(SignupThrottleRecord.key == key)
-                             .values(count=SignupThrottleRecord.count + 1)
-                             .returning(SignupThrottleRecord.count)).scalar_one_or_none()
-            if row is None:
-                try:
-                    with db.begin_nested():
-                        db.add(SignupThrottleRecord(key=key, count=1,
-                                                   expires_at=now + timedelta(minutes=20)))
-                        db.flush()
-                    row = 1
-                except IntegrityError:
-                    row = db.execute(update(SignupThrottleRecord).where(SignupThrottleRecord.key == key)
-                                     .values(count=SignupThrottleRecord.count + 1)
-                                     .returning(SignupThrottleRecord.count)).scalar_one()
+            per_address = self._increment_attempts(db, f"address:{address}:{window}", now)
+            # A blocked client cannot exhaust the global allowance on its own.
+            global_count = (self._increment_attempts(db, f"global:{window}", now)
+                            if per_address <= 5 else 0)
             db.commit()
-        if row > 20:
+        if per_address > 5 or global_count > 100:
             raise SignupRateLimited("Too many registration attempts. Please try again in ten minutes.")
+
+    @staticmethod
+    def _increment_attempts(db, bucket, now):
+        key = hashlib.sha256(bucket.encode()).hexdigest()
+        count = db.execute(update(SignupThrottleRecord).where(SignupThrottleRecord.key == key)
+                           .values(count=SignupThrottleRecord.count + 1)
+                           .returning(SignupThrottleRecord.count)).scalar_one_or_none()
+        if count is not None:
+            return count
+        try:
+            with db.begin_nested():
+                db.add(SignupThrottleRecord(key=key, count=1,
+                                           expires_at=now + timedelta(minutes=20)))
+                db.flush()
+            return 1
+        except IntegrityError:
+            return db.execute(update(SignupThrottleRecord).where(SignupThrottleRecord.key == key)
+                              .values(count=SignupThrottleRecord.count + 1)
+                              .returning(SignupThrottleRecord.count)).scalar_one()
 
     def validate(self, db, code):
         invitation = db.scalar(select(InvitationRecord).where(

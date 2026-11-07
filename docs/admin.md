@@ -123,8 +123,12 @@ operator procedure above, then enable the invitation requirement in `/admin`
 and restore the environment default to `true` before opening access.
 
 Under **Invitations**, generate a code and copy it immediately. The full code
-appears only in that response and is never stored; the list shows its last eight
-characters. The list includes creation time, creator email, status, recipient
+appears only in that response and is never stored. New codes have four characters
+using uppercase letters and numbers, excluding I, O, 0, and 1. Short codes are
+case-insensitive; existing long codes keep working with their original case.
+The list identifies new invitations by their record ID, so it does not reveal
+the short code. Existing long invitations still show their last eight characters.
+The list includes creation time, creator email, status, recipient
 email, and redemption time, with pages of 50 invitations. Available invitations
 can be deactivated. Used/deactivated records remain visible, and deactivation
 does not disable an already-registered user. All times are UTC.
@@ -139,9 +143,13 @@ not consume a code. Deactivation takes effect even after registration has begun.
 Code generation, deactivation, redemption, and policy changes are audited without
 recording raw codes.
 
-The invitation form uses an anonymous CSRF token and permits 20 submissions per
-client address per ten-minute window, shared across app processes. Client IP
-attribution depends on trusted proxy configuration; do not expose the app directly
+The invitation form uses an anonymous CSRF token and permits five submissions per
+client address and 100 submissions globally per ten-minute window, shared across
+app processes. A client already over its own limit does not consume the global
+allowance. The global cap limits distributed guessing but can temporarily block
+legitimate signup during an attack. Four-character codes have a smaller guessing
+space than long tokens; keep the number of available invitations small and
+deactivate unwanted invitations. Client IP attribution depends on trusted proxy configuration; do not expose the app directly
 with untrusted forwarded headers. Raw codes are sent in POST bodies, never URLs;
 keep request-body logging disabled at the proxy as well as the application.
 
