@@ -9,8 +9,8 @@ New and existing users default to `user`.
 
 These changes are local source changes until deployed. Use the normal reviewed
 Lightsail release process (`deploy/lightsail/release.sh`); it backs up the database,
-stops the app, applies Alembic migrations, and starts the new image. The new schema
-revision is `20261105_0003`. Do not run these commands against the old image.
+stops the app, applies Alembic migrations, and starts the new image. The latest schema
+revision is `20261106_0004`. Do not run these commands against the old image.
 For local development, run `.venv/bin/alembic upgrade head` before restarting an
 existing database. Automatic SQLite schema creation only handles empty databases;
 it does not upgrade existing tables.
@@ -102,3 +102,50 @@ operations are not implemented by this release.
 This feature has automated authorization, CSRF, identity isolation, migration,
 settings persistence, stale-update, and audit checks. It is not a penetration test
 or an audit of the live Lightsail configuration.
+
+## Invitation-only registration
+
+Deploy schema revision `20261106_0004` using the normal release process before
+running this version. For local existing databases, run `.venv/bin/alembic upgrade head`.
+No Cognito configuration changes are needed.
+
+`INVITE_ONLY_SIGNUP=true` is the default. In `/admin`, **Registration → Require
+invitation to register** controls the current policy. Once an admin saves this
+setting, the database value takes precedence over the environment default and
+persists across restarts. Turn it off to reopen public registration. Concurrent
+stale setting changes return 409; reload before saving again.
+
+Existing users, including existing admins, can sign in without invitations.
+For a brand-new installation without an admin, temporarily set
+`INVITE_ONLY_SIGNUP=false` while access is restricted to a trusted operator
+(for example, the SSH tunnel). Create the first user and grant admin using the
+operator procedure above, then enable the invitation requirement in `/admin`
+and restore the environment default to `true` before opening access.
+
+Under **Invitations**, generate a code and copy it immediately. The full code
+appears only in that response and is never stored; the list shows its last eight
+characters. The list includes creation time, creator email, status, recipient
+email, and redemption time, with pages of 50 invitations. Available invitations
+can be deactivated. Used/deactivated records remain visible, and deactivation
+does not disable an already-registered user. All times are UTC.
+
+Missing/invalid codes are rejected locally before redirecting to Cognito. The
+code is bound to the server-side OAuth attempt and checked again after verified
+Cognito authentication. Only a successful transaction creating a new app user
+and session consumes it. Authentication errors, abandonment, expired attempts,
+and failed database transactions leave the code available for a fresh signup.
+Two concurrent users cannot redeem one code. An existing user's sign-in does
+not consume a code. Deactivation takes effect even after registration has begun.
+Code generation, deactivation, redemption, and policy changes are audited without
+recording raw codes.
+
+The invitation form uses an anonymous CSRF token and permits 20 submissions per
+client address per ten-minute window, shared across app processes. Client IP
+attribution depends on trusted proxy configuration; do not expose the app directly
+with untrusted forwarded headers. Raw codes are sent in POST bodies, never URLs;
+keep request-body logging disabled at the proxy as well as the application.
+
+This is an application access gate: Cognito's own registration can still create
+an identity, but first login cannot create a StockPilotAI user or session without
+a valid invitation while the requirement is enabled. It does not change Cognito
+email verification, MFA, password recovery, or existing sessions.

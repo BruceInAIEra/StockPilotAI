@@ -66,6 +66,30 @@ class LoginAttemptRecord(Base):
     nonce: Mapped[str] = mapped_column(String(64))
     verifier: Mapped[str] = mapped_column(String(128))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    invitation_id: Mapped[str | None] = mapped_column(ForeignKey("invitations.id"), nullable=True)
+
+
+class InvitationRecord(Base):
+    __tablename__ = "invitations"
+    __table_args__ = (CheckConstraint("used_at IS NULL OR deactivated_at IS NULL", name="ck_invitation_state"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    suffix: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    used_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True, unique=True)
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deactivated_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class SignupThrottleRecord(Base):
+    __tablename__ = "signup_throttle"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    count: Mapped[int] = mapped_column(Integer)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class AnalysisRecord(Base):

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Create account · StockPilotAI{% endblock %}
+{% block content %}
+<section class="hero account-hero">
+  <div class="eyebrow">Join StockPilotAI</div>
+  <h1>Create account</h1>
+  <p>Registration currently requires an invitation. Ask an administrator for a code.</p>
+</section>
+<section class="panel account-panel">
+  <h2>Enter your invitation code</h2>
+  {% if error %}<div class="alert" role="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/signup">
+    <input type="hidden" name="signup_csrf" value="{{ signup_csrf }}">
+    <label for="invitation-code">Invitation code</label>
+    <input id="invitation-code" name="invitation_code" type="text" required maxlength="128" autocomplete="off" autocapitalize="none" spellcheck="false">
+    <button class="primary-button" type="submit">Continue to registration</button>
+  </form>
+  <p class="field-help">Your code is used only after your StockPilotAI account is successfully created.</p>
+  <p><a href="/login">Already have an account? Sign in</a></p>
+</section>
+{% endblock %}

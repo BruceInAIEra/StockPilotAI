@@ -3,8 +3,8 @@
 {% block content %}
 <section class="hero account-hero">
   <div class="eyebrow">Administration</div>
-  <h1>Model settings</h1>
-  <p>Choose which models are available for new research. Existing reports keep their original model.</p>
+  <h1>Administration</h1>
+  <p>Manage registration, invitations, and the models available for new research.</p>
 </section>
 <section class="panel account-panel">
   <h2>Available models</h2>
@@ -26,6 +26,59 @@
     <input id="reason" name="reason" type="text" maxlength="500" required>
     <button class="primary-button" type="submit">Save model settings</button>
   </form>
+</section>
+<section class="panel account-panel">
+  <h2>Registration</h2>
+  <form method="post" action="/admin/signup-policy">
+    <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
+    <input type="hidden" name="version" value="{{ signup_policy.version }}">
+    <label class="admin-model-option"><input type="checkbox" name="invite_only" value="true" {% if signup_policy.required %}checked{% endif %}> Require invitation to register</label>
+    <p class="field-help">Turning this off allows public registration. Existing users can always sign in without a code.</p>
+    <button class="primary-button" type="submit">Save registration setting</button>
+  </form>
+</section>
+<section class="panel">
+  <h2>Invitations</h2>
+  <form method="post" action="/admin/invitations">
+    <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
+    <button class="primary-button" type="submit">Generate invitation</button>
+  </form>
+  {% if generated_code %}
+  <div class="alert" role="status">
+    <p>Copy this code now. The full code will not be shown again.</p>
+    <label for="generated-invitation">New invitation code</label>
+    <input id="generated-invitation" type="text" value="{{ generated_code }}" readonly autocomplete="off">
+    <button type="button" id="copy-invitation">Copy code</button>
+    <span id="copy-invitation-status" aria-live="polite"></span>
+  </div>
+  {% endif %}
+  <div class="invitation-table-wrap">
+  <table class="invitation-table">
+    <thead><tr><th>Code identifier</th><th>Created (UTC)</th><th>Created by</th><th>Status</th><th>Used by</th><th>Used (UTC)</th><th>Action</th></tr></thead>
+    <tbody>
+    {% for invitation, creator, recipient in invitations %}
+    <tr>
+      <td><code>…{{ invitation.suffix }}</code></td>
+      <td>{{ invitation.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td>{{ creator }}</td>
+      <td>{% if invitation.used_at %}Used{% elif invitation.deactivated_at %}Deactivated{% else %}Available{% endif %}</td>
+      <td>{{ recipient or '—' }}</td>
+      <td>{{ invitation.used_at.strftime('%Y-%m-%d %H:%M') if invitation.used_at else '—' }}</td>
+      <td>{% if not invitation.used_at and not invitation.deactivated_at %}
+        <form method="post" action="/admin/invitations/{{ invitation.id }}/deactivate">
+          <input type="hidden" name="csrf_token" value="{{ request.state.user.csrf_token }}">
+          <button type="submit">Deactivate</button>
+        </form>
+      {% elif invitation.deactivated_at %}{{ invitation.deactivated_at.strftime('%Y-%m-%d %H:%M') }} UTC{% else %}—{% endif %}</td>
+    </tr>
+    {% else %}<tr><td colspan="7">No invitations on this page.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <nav aria-label="Invitation pages">
+    {% if page > 1 %}<a href="/admin?page={{ page - 1 }}">Newer invitations</a>{% endif %}
+    {% if invitations | length == 50 %}<a href="/admin?page={{ page + 1 }}">Older invitations</a>{% endif %}
+  </nav>
 </section>
 <section class="panel account-panel">
   <h2>Recent administration changes</h2>

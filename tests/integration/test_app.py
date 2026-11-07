@@ -139,6 +139,7 @@ def make_client(tmp_path, fundamentals_provider=None, analysis_engine=None, news
                 market_provider=None, settings=None, authenticate=True, auth_provider=None) -> TestClient:
     settings = settings or Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
+        invite_only_signup=False,
         openai_api_key="test-key",
         openai_default_model="test-model",
         openai_allowed_models="test-model",

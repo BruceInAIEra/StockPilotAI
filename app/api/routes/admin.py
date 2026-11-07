@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.repositories.database import AppSettingRecord
 from app.services.admin_service import ModelSettings, ModelsUnavailable, SettingsConflict
+from app.services.invitation_service import InvitationError
 
 
 def require_admin(request: Request):
@@ -21,7 +22,7 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 templates = Jinja2Templates(directory="app/templates")
 
 
-def render(request, error=None, status_code=200):
+def render(request, error=None, status_code=200, generated_code=None, page=1):
     service = request.app.state.container.admin_service
     try:
         current = service.model_settings()
@@ -33,12 +34,15 @@ def render(request, error=None, status_code=200):
     return templates.TemplateResponse(request=request, name="admin.html", context={
         "current": current, "available_models": service.settings.allowed_models,
         "audit": service.recent_audit(), "error": error,
+        "signup_policy": request.app.state.container.auth_service.invitations.policy(),
+        "invitations": request.app.state.container.auth_service.invitations.recent(page),
+        "generated_code": generated_code, "page": page,
     }, status_code=status_code)
 
 
 @router.get("")
-def admin_page(request: Request):
-    return render(request)
+def admin_page(request: Request, page: int = 1):
+    return render(request, page=max(1, page))
 
 
 @router.post("/models")
@@ -54,4 +58,37 @@ def save_models(request: Request, default: Annotated[str, Form()],
         return render(request, str(exc), 409)
     except ValueError as exc:
         return render(request, str(exc), 422)
+    return RedirectResponse("/admin", 303)
+
+
+@router.post("/signup-policy")
+def save_signup_policy(request: Request, version: Annotated[int, Form(ge=0)],
+                       invite_only: Annotated[bool, Form()] = False):
+    try:
+        request.app.state.container.auth_service.invitations.save_policy(
+            request.state.user, invite_only, version)
+    except PermissionError as exc:
+        raise HTTPException(403, "Admin access required.") from exc
+    except SettingsConflict as exc:
+        return render(request, str(exc), 409)
+    return RedirectResponse("/admin", 303)
+
+
+@router.post("/invitations")
+def generate_invitation(request: Request):
+    try:
+        code = request.app.state.container.auth_service.invitations.generate(request.state.user)
+    except PermissionError as exc:
+        raise HTTPException(403, "Admin access required.") from exc
+    return render(request, generated_code=code)
+
+
+@router.post("/invitations/{invitation_id}/deactivate")
+def deactivate_invitation(request: Request, invitation_id: str):
+    try:
+        request.app.state.container.auth_service.invitations.deactivate(request.state.user, invitation_id)
+    except PermissionError as exc:
+        raise HTTPException(403, "Admin access required.") from exc
+    except InvitationError as exc:
+        return render(request, str(exc), 409)
     return RedirectResponse("/admin", 303)

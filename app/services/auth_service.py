@@ -16,11 +16,13 @@ from uuid import uuid4
 import httpx
 import jwt
 from cryptography.fernet import Fernet
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.core.config import Settings
-from app.repositories.database import AuthSessionRecord, LoginAttemptRecord, UserRecord
+from app.repositories.database import AuthSessionRecord, InvitationRecord, LoginAttemptRecord, UserRecord
+from app.services.invitation_service import InvitationError, InvitationService, signup_policy
+from app.services.admin_service import audit
 
 
 class AuthenticationError(Exception):
@@ -140,10 +142,11 @@ class AuthService:
         self.factory = factory
         self.settings = settings
         self.provider = provider or CognitoProvider(settings)
+        self.invitations = InvitationService(factory, settings)
         self.cipher = (Fernet(settings.session_encryption_key.get_secret_value().encode())
                        if settings.session_encryption_key else None)
 
-    def begin_login(self, mode: str = "login") -> tuple[str, str]:
+    def begin_login(self, mode: str = "login", invitation_code: str = "") -> tuple[str, str]:
         if not self.settings.auth_configured:
             raise AuthenticationError("Account access is being configured. Please try again later.")
         state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
@@ -151,7 +154,15 @@ class AuthService:
         with self.factory() as db:
             db.execute(delete(LoginAttemptRecord).where(LoginAttemptRecord.expires_at <= now))
             db.execute(delete(AuthSessionRecord).where(AuthSessionRecord.expires_at <= now))
-            db.add(LoginAttemptRecord(state_hash=digest(state), nonce=nonce, verifier=verifier,
+            invitation_id = None
+            if mode == "signup" and (signup_policy(db, self.settings).required or invitation_code):
+                try:
+                    if len(invitation_code) > 128:
+                        raise InvitationError("A valid, unused invitation code is required.")
+                    invitation_id = self.invitations.validate(db, invitation_code)
+                except InvitationError as exc:
+                    raise AuthenticationError(str(exc)) from exc
+            db.add(LoginAttemptRecord(invitation_id=invitation_id, state_hash=digest(state), nonce=nonce, verifier=verifier,
                                       expires_at=now + timedelta(minutes=10)))
             db.commit()
         params = {
@@ -175,14 +186,14 @@ class AuthService:
             attempt = db.execute(delete(LoginAttemptRecord).where(
                 LoginAttemptRecord.state_hash == digest(state),
                 LoginAttemptRecord.expires_at > datetime.now(UTC),
-            ).returning(LoginAttemptRecord.nonce, LoginAttemptRecord.verifier)).first()
+            ).returning(LoginAttemptRecord.nonce, LoginAttemptRecord.verifier, LoginAttemptRecord.invitation_id)).first()
             db.commit()  # Consume before external exchange: a callback is never reusable.
         if not attempt:
             raise AuthenticationError("Sign-in expired. Please try again.")
         identity = self.provider.exchange(code, attempt.verifier, attempt.nonce)
-        return self.establish_session(identity, old_cookie)
+        return self.establish_session(identity, old_cookie, invitation_id=attempt.invitation_id)
 
-    def establish_session(self, identity: Identity, old_cookie: str = "") -> tuple[str, Principal]:
+    def establish_session(self, identity: Identity, old_cookie: str = "", *, invitation_id: str | None = None) -> tuple[str, Principal]:
         if not self.cipher:
             raise AuthenticationError("Account access is unavailable.")
         if identity.issuer != self.settings.cognito_issuer:
@@ -199,10 +210,23 @@ class AuthService:
                     user = db.scalar(select(UserRecord).where(
                         UserRecord.issuer == identity.issuer, UserRecord.subject == identity.subject))
                     if user is None:
+                        if signup_policy(db, self.settings).required and invitation_id is None:
+                            raise AuthenticationError("An invitation is required. Please use Create account to register.")
                         user = UserRecord(id=str(uuid4()), issuer=identity.issuer,
                                           subject=identity.subject, email=identity.email)
                         db.add(user)
                         db.flush()
+                        if invitation_id is not None:
+                            redeemed = db.execute(update(InvitationRecord).where(
+                                InvitationRecord.id == invitation_id,
+                                InvitationRecord.used_at.is_(None),
+                                InvitationRecord.deactivated_at.is_(None),
+                            ).values(used_at=datetime.now(UTC), used_by=user.id))
+                            if redeemed.rowcount != 1:
+                                raise AuthenticationError("This invitation is unavailable. Please request another code.")
+                            audit(db, user.id, "invitation.redeem", invitation_id,
+                                  {"status": "available"}, {"status": "used", "user_id": user.id},
+                                  "Registered with invitation")
                     if user.disabled:
                         raise AuthenticationError("This account is unavailable.")
                     user.email = identity.email

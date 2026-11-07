@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     cognito_client_secret: SecretStr | None = None
     cognito_domain: str = ""
     session_encryption_key: SecretStr | None = None
+    invite_only_signup: bool = True
     session_lifetime_seconds: int = Field(default=3600, ge=300, le=3600)
 
     @model_validator(mode="after")

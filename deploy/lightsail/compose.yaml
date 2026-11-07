@@ -11,6 +11,7 @@ x-app-environment: &app-environment
   COGNITO_USER_POOL_ID: ${COGNITO_USER_POOL_ID:?required}
   COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:?required}
   COGNITO_DOMAIN: ${COGNITO_DOMAIN:?required}
+  INVITE_ONLY_SIGNUP: ${INVITE_ONLY_SIGNUP:-true}
   SESSION_ENCRYPTION_KEY: ${SESSION_ENCRYPTION_KEY:?required}
 
 x-logging: &logging

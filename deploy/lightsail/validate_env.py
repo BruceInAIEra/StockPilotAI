@@ -61,13 +61,15 @@ def validate(path: Path) -> dict[str, str]:
     if not re.fullmatch(r"https://[a-z0-9-]+\.auth\.us-west-2\.amazoncognito\.com",
                         values.get("COGNITO_DOMAIN", "")):
         raise ValueError("Set the Cognito managed domain URL in us-west-2")
+    if values.get("INVITE_ONLY_SIGNUP", "true") not in {"true", "false"}:
+        raise ValueError("INVITE_ONLY_SIGNUP must be true or false")
     key = values.get("SESSION_ENCRYPTION_KEY", "")
     if not re.fullmatch(r"[A-Za-z0-9_-]{43}=", key) or len(base64.urlsafe_b64decode(key)) != 32:
         raise ValueError("Set a generated Fernet session encryption key")
     if set(values) - {"ACCESS_MODE", "SITE_DOMAIN", "POSTGRES_PASSWORD", "OPENAI_API_KEY",
                       "OPENAI_DEFAULT_MODEL", "OPENAI_ALLOWED_MODELS", "APP_BASE_URL",
                       "COGNITO_USER_POOL_ID", "COGNITO_CLIENT_ID", "COGNITO_DOMAIN",
-                      "SESSION_ENCRYPTION_KEY"}:
+                      "SESSION_ENCRYPTION_KEY", "INVITE_ONLY_SIGNUP"}:
         raise ValueError("Unexpected runtime configuration key")
     return values
 

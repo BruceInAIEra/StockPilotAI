@@ -380,3 +380,10 @@ footer { padding: 22px 0 35px; border-top: 1px solid var(--line); color: var(--m
   .site-header { flex-wrap: wrap; gap: 18px; }
   .account-nav { width: 100%; gap: 14px; font-size: .9rem; }
 }
+
+.invitation-table-wrap { overflow-x: auto; margin-top: 1.5rem; }
+.invitation-table { width: 100%; border-collapse: collapse; text-align: left; }
+.invitation-table th, .invitation-table td { padding: .75rem; border-bottom: 1px solid var(--border, #ddd); }
+.invitation-table td { vertical-align: top; }
+#invitation-code, #generated-invitation { padding: 12px 14px; }
+.account-panel form + .field-help { margin-top: 12px; }

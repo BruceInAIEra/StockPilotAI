@@ -78,3 +78,19 @@ if (pendingAnalysis) {
   });
   checkAnalysis();
 }
+
+
+const copyInvitation = document.getElementById("copy-invitation");
+if (copyInvitation) {
+  copyInvitation.addEventListener("click", async () => {
+    const input = document.getElementById("generated-invitation");
+    const status = document.getElementById("copy-invitation-status");
+    try {
+      await navigator.clipboard.writeText(input.value);
+      status.textContent = "Copied.";
+    } catch {
+      input.select();
+      status.textContent = "Select and copy the code manually.";
+    }
+  });
+}

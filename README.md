@@ -158,6 +158,7 @@ Unset `DATABASE_URL` in that terminal to return to your `.env` database setting.
 | `OPENAI_TIMEOUT_SECONDS` | `180` | OpenAI read timeout per attempt in seconds (maximum 600) |
 | `OPENAI_MAX_RETRIES` | `1` | Additional attempts for retryable OpenAI failures (0–2) |
 | `DATABASE_URL` | `sqlite:///data/stockpilot.db` | SQLite locally or PostgreSQL using `postgresql+psycopg://...` |
+| `INVITE_ONLY_SIGNUP` | `true` | Initial invitation requirement; a saved admin Registration setting overrides it |
 | `APP_ENV` | `development` | Automatic table creation is limited to SQLite in `development` or `test`; other environments require migrations |
 | `MARKET_DATA_TIMEOUT_SECONDS` | `20` | Market-data request timeout |
 

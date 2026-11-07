@@ -33,6 +33,7 @@ def postgres_settings(monkeypatch):
         yield Settings(
             _env_file=None,
             app_env="production",
+            invite_only_signup=False,
             database_url=isolated_url.render_as_string(hide_password=False),
             openai_api_key=None,
             openai_default_model="test-model",
@@ -118,3 +119,56 @@ def test_admin_role_settings_and_concurrent_updates(postgres_settings, tmp_path)
         assert client.get("/admin").status_code == 403
     with make_client(tmp_path, settings=postgres_settings) as client:
         assert client.app.state.container.admin_service.model_settings().version == 1
+
+
+def test_invitation_atomicity_and_concurrent_redemption(postgres_settings, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from sqlalchemy import event, func, select
+    from sqlalchemy.exc import OperationalError
+    from app.repositories.database import AdminAuditRecord, InvitationRecord, UserRecord
+    from app.services.auth_service import AuthenticationError
+    from tests.integration.test_admin import promote
+    from tests.integration.test_invitations import identity
+
+    command.upgrade(Config("alembic.ini"), "head")
+    with make_client(tmp_path, settings=postgres_settings) as client:
+        admin = promote(client)
+        auth = client.app.state.container.auth_service
+        code = auth.invitations.generate(admin)
+        auth.invitations.save_policy(admin, True, 0)
+        with auth.factory() as db:
+            invitation_id = db.scalar(select(InvitationRecord.id))
+        engine = auth.factory.kw["bind"]
+        def fail_session(conn, cursor, statement, parameters, context, executemany):
+            if statement.startswith("INSERT INTO auth_sessions"):
+                raise OperationalError(statement, {}, Exception("Injected session failure"))
+        event.listen(engine, "before_cursor_execute", fail_session)
+        try:
+            with pytest.raises(OperationalError):
+                auth.establish_session(identity(client, "rollback-user"), invitation_id=invitation_id)
+        finally:
+            event.remove(engine, "before_cursor_execute", fail_session)
+        with auth.factory() as db:
+            assert db.get(InvitationRecord, invitation_id).used_at is None
+            assert db.scalar(select(UserRecord).where(UserRecord.subject == "rollback-user")) is None
+        auth.begin_login("signup", code)
+        barrier = Barrier(2)
+        def redeem(subject):
+            barrier.wait(timeout=10)
+            try:
+                auth.establish_session(identity(client, subject), invitation_id=invitation_id)
+                return "saved"
+            except AuthenticationError:
+                return "rejected"
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            assert sorted(pool.map(redeem, ("first-invitee", "second-invitee"))) == ["rejected", "saved"]
+        with auth.factory() as db:
+            assert db.scalar(select(func.count()).select_from(UserRecord).where(
+                UserRecord.subject.in_(["first-invitee", "second-invitee"]))) == 1
+            assert db.scalar(select(func.count()).select_from(AdminAuditRecord).where(
+                AdminAuditRecord.action == "invitation.redeem")) == 1
+        # Throttle counters are shared across PostgreSQL sessions as well.
+        auth.invitations.check_rate_limit("postgres-test")
+        auth.invitations.check_rate_limit("postgres-test")
